@@ -200,3 +200,27 @@ func TestServeRefusesWhatItShould(t *testing.T) {
 		t.Errorf("busy server: status %d, want 429", rec.Code)
 	}
 }
+
+// Third-party actions run with the job's token, so each is pinned to a full
+// commit SHA (a tag can be moved), and checkout must not leave the token in
+// .git/config for later steps.
+func TestWorkflowsPinActionsAndDropCredentials(t *testing.T) {
+	files, _ := filepath.Glob(".github/workflows/*.yml")
+	files = append(files, "action.yml")
+	uses := regexp.MustCompile(`(?m)^\s*- uses: (\S+)`)
+	pinned := regexp.MustCompile(`^[\w.-]+/[\w./-]+@[0-9a-f]{40}$`)
+	for _, name := range files {
+		b, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range uses.FindAllStringSubmatch(string(b), -1) {
+			if !strings.HasPrefix(m[1], "./") && !pinned.MatchString(m[1]) {
+				t.Errorf("%s: %s is not pinned to a commit SHA", name, m[1])
+			}
+		}
+		if c, p := strings.Count(string(b), "actions/checkout@"), strings.Count(string(b), "persist-credentials: false"); c != p {
+			t.Errorf("%s: %d checkouts but %d with persist-credentials: false", name, c, p)
+		}
+	}
+}
