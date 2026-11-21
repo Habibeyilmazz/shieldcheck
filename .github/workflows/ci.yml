@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod # the oldest Go the module claims to support
+          cache: false # no dependencies to cache
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+      - name: Build for Linux, macOS and Windows
+        run: |
+          for os in linux darwin windows; do
+            GOOS=$os GOARCH=amd64 go build -o /dev/null .
+          done
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Start a fixture site with no security headers
+        run: |
+          mkdir site && echo '<html>fixture</html>' > site/index.html
+          python3 -m http.server 4110 --bind 127.0.0.1 --directory site &
+          sleep 1
+      - name: Scan it and write SARIF
+        uses: ./
+        with:
+          url: http://127.0.0.1:4110
+          allow-private: "true"
+          format: sarif
+          output: shieldcheck.sarif
+      - name: SARIF report was written
+        run: test "$(jq -r '.version' shieldcheck.sarif)" = "2.1.0" && test "$(jq '.runs[0].results | length' shieldcheck.sarif)" -gt 3
+      - name: Scan again with a minimum grade
+        id: gate
+        continue-on-error: true
+        uses: ./
+        with:
+          url: http://127.0.0.1:4110
+          allow-private: "true"
+          min-grade: B
+      - name: The grade gate failed the step
+        run: test "${{ steps.gate.outcome }}" = "failure"

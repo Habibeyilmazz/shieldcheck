@@ -1,0 +1,55 @@
+name: shieldcheck
+description: >-
+  Passive security audit of a website you own: headers, TLS, cookies, redirects,
+  SPF/DMARC and security.txt. Fails the job below a minimum grade.
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  url:
+    description: URL to scan. Scan only sites you own or are authorised to test.
+    required: true
+  min-grade:
+    description: Fail the step if the grade is worse than this (A, B, C or D). Empty never fails on grade.
+    default: ""
+  format:
+    description: terminal, json, sarif or html.
+    default: terminal
+  output:
+    description: File to write the report to. Empty prints it to the job log.
+    default: ""
+  probe:
+    description: Set to "true" to also request /.git/HEAD and /.env.
+    default: "false"
+  allow-private:
+    description: Set to "true" to allow loopback and private addresses, such as a server started earlier in the job.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v6
+      with:
+        go-version: stable
+        cache: false
+    - name: Build shieldcheck
+      shell: bash
+      run: cd "$GITHUB_ACTION_PATH" && go build -o "$RUNNER_TEMP/shieldcheck" .
+    - name: Scan
+      shell: bash
+      # Inputs go through the environment so they are never interpolated into the script.
+      env:
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_MIN_GRADE: ${{ inputs.min-grade }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_PROBE: ${{ inputs.probe }}
+        INPUT_ALLOW_PRIVATE: ${{ inputs.allow-private }}
+      run: |
+        args=(scan --format "$INPUT_FORMAT")
+        if [ -n "$INPUT_MIN_GRADE" ]; then args+=(--min-grade "$INPUT_MIN_GRADE"); fi
+        if [ -n "$INPUT_OUTPUT" ]; then args+=(--output "$INPUT_OUTPUT"); fi
+        if [ "$INPUT_PROBE" = "true" ]; then args+=(--probe); fi
+        if [ "$INPUT_ALLOW_PRIVATE" = "true" ]; then args+=(--allow-private); fi
+        "$RUNNER_TEMP/shieldcheck" "${args[@]}" -- "$INPUT_URL"
