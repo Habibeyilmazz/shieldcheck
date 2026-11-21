@@ -139,7 +139,7 @@ jobs:
 
 Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
 
-To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning:
+To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning (this workflow was run against a test site and its upload accepted):
 
 ```yaml
 jobs:

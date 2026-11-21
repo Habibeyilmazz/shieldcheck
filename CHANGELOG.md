@@ -59,8 +59,13 @@ literally, and every reported gap checked by running it.
 - Every httptest fixture is on loopback, so `https.missing` (critical) cannot
   be reached end to end any more; `TestPlainHTTPIsCriticalExceptOnLoopback`
   covers it by calling `checkTransport` directly.
+- The README's code scanning workflow (the action at `v0.1.1`, then
+  `github/codeql-action/upload-sarif@v4`) was run once on a temporary branch
+  after the release: the upload was accepted and produced 11 alerts. The
+  branch and its alerts were removed afterwards, so the Security tab is empty.
 - Still not verified: the TLS, HTTPS-redirect and cookie snippets on a live
-  server, and anything on Next.js, Vercel or Netlify.
+  server, and anything on Next.js, Vercel or Netlify. There is no container
+  image.
 
 ## [0.1.0] - 2026-11-21
 
