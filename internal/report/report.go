@@ -70,7 +70,8 @@ func wrap(s, indent string, width int) string {
 	var b strings.Builder
 	col := 0
 	for _, word := range strings.Fields(s) {
-		if col > 0 && col+1+len(word) > width {
+		n := utf8.RuneCountInString(word)
+		if col > 0 && col+1+n > width {
 			b.WriteString("\n")
 			col = 0
 		}
@@ -81,7 +82,7 @@ func wrap(s, indent string, width int) string {
 			col++
 		}
 		b.WriteString(word)
-		col += len(word)
+		col += n
 	}
 	return b.String()
 }

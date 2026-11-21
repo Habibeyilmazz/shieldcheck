@@ -101,6 +101,10 @@ func TestWrap(t *testing.T) {
 	if got != "  one two\n  three\n  four five" {
 		t.Errorf("wrap = %q", got)
 	}
+	// Width counts characters, not bytes: accented and CJK words are not "longer".
+	if got := wrap("été été été", "", 11); got != "été été été" {
+		t.Errorf("wrap counted bytes: %q", got)
+	}
 }
 
 func TestJSONRoundTrip(t *testing.T) {
