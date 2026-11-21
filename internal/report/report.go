@@ -177,6 +177,68 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 	return err
 }
 
+// ---- Markdown ----
+
+// md makes s plain text in GitHub-flavoured Markdown, safe in a table cell:
+// one line, no control characters, and the characters that start emphasis,
+// code, links, images, raw HTML, headings or a "|" cell break backslash-escaped.
+func md(s string) string {
+	var b strings.Builder
+	for _, r := range sanitize(strings.Join(strings.Fields(s), " ")) {
+		if strings.ContainsRune("\\`*_~[]<>&|!#", r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// Markdown writes a short report for a GitHub job summary or a pull request
+// comment. The action's grade and score outputs are read from its first line,
+// "## shieldcheck: grade X (N/100)", so keep that line's shape.
+func Markdown(w io.Writer, r *scan.Report) error {
+	var b strings.Builder
+	p := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
+	p("## shieldcheck: grade %s (%d/100)\n\n", r.Grade, r.Score)
+	p("%s, %s\n", md(r.FinalURL), summary(r))
+	if issues := len(r.Findings) - r.Count(scan.Pass); issues > 0 {
+		p("\n| Severity | Finding | How to fix | ID |\n| --- | --- | --- | --- |\n")
+		for _, f := range r.Findings {
+			if f.Severity == scan.Pass {
+				continue
+			}
+			finding := "**" + md(f.Title) + "**"
+			if f.Detail != "" {
+				finding += "<br>" + md(f.Detail)
+			}
+			fix := md(f.Advice)
+			if h := f.Header; h != nil {
+				fix = md("Send " + h.Name + ": " + h.Value + ". " + f.Advice)
+			}
+			p("| %s | %s | %s | %s |\n", labels[f.Severity], finding, fix, md(f.ID))
+		}
+		p("\nRun `shieldcheck scan <url> --fix nginx` (or apache, caddy, nextjs, vercel, netlify) for copy-paste config.\n")
+	}
+	if len(r.Ignored) > 0 {
+		var names []string
+		for _, f := range r.Ignored {
+			names = append(names, md(f.Title)+" ("+md(f.ID)+")")
+		}
+		p("\n**Ignored, not graded:** %s\n", strings.Join(names, ", "))
+	}
+	if n := r.Count(scan.Pass); n > 0 {
+		p("\n<details><summary>%d passed</summary>\n\n", n)
+		for _, f := range r.Findings {
+			if f.Severity == scan.Pass {
+				p("- %s\n", md(f.Title))
+			}
+		}
+		p("\n</details>\n")
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
 // ---- SARIF 2.1.0 ----
 
 type obj = map[string]any

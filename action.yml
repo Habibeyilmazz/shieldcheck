@@ -14,7 +14,7 @@ inputs:
     description: Fail the step if the grade is worse than this (A, B, C or D). Empty never fails on grade.
     default: ""
   format:
-    description: terminal, json, sarif or html.
+    description: terminal, json, sarif, html or markdown.
     default: terminal
   output:
     description: File to write the report to. Empty prints it to the job log.
@@ -30,6 +30,17 @@ inputs:
   allow-private:
     description: Set to "true" to allow loopback and private addresses, such as a server started earlier in the job.
     default: "false"
+  summary:
+    description: Set to "false" to not add the grade and findings table to the job summary.
+    default: "true"
+
+outputs:
+  grade:
+    description: The grade, A to F. Empty if the scan could not run.
+    value: ${{ steps.scan.outputs.grade }}
+  score:
+    description: The score, 0 to 100. Empty if the scan could not run.
+    value: ${{ steps.scan.outputs.score }}
 
 runs:
   using: composite
@@ -42,6 +53,7 @@ runs:
       shell: bash
       run: cd "$GITHUB_ACTION_PATH" && go build -o "$RUNNER_TEMP/shieldcheck" .
     - name: Scan
+      id: scan
       shell: bash
       # Inputs go through the environment so they are never interpolated into the script.
       env:
@@ -52,6 +64,7 @@ runs:
         INPUT_IGNORE: ${{ inputs.ignore }}
         INPUT_PROBE: ${{ inputs.probe }}
         INPUT_ALLOW_PRIVATE: ${{ inputs.allow-private }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
       run: |
         args=(scan --format "$INPUT_FORMAT")
         if [ -n "$INPUT_MIN_GRADE" ]; then args+=(--min-grade "$INPUT_MIN_GRADE"); fi
@@ -60,4 +73,15 @@ runs:
         for id in ${INPUT_IGNORE//,/ }; do args+=(--ignore "$id"); done
         if [ "$INPUT_PROBE" = "true" ]; then args+=(--probe); fi
         if [ "$INPUT_ALLOW_PRIVATE" = "true" ]; then args+=(--allow-private); fi
-        "$RUNNER_TEMP/shieldcheck" "${args[@]}" -- "$INPUT_URL"
+        summary="$RUNNER_TEMP/shieldcheck-summary.md"
+        rm -f "$summary"
+        args+=(--summary "$summary")
+        status=0
+        "$RUNNER_TEMP/shieldcheck" "${args[@]}" -- "$INPUT_URL" || status=$?
+        # The summary's first line is "## shieldcheck: grade X (N/100)".
+        if [ -f "$summary" ] && [[ "$(head -n 1 "$summary")" =~ grade\ ([A-F])\ \(([0-9]+)/100\) ]]; then
+          echo "grade=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "score=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+          if [ "$INPUT_SUMMARY" != "false" ]; then cat "$summary" >> "$GITHUB_STEP_SUMMARY"; fi
+        fi
+        exit "$status"

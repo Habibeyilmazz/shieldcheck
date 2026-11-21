@@ -27,8 +27,10 @@ Usage:
   shieldcheck version
 
 Scan flags:
-  --format terminal|json|sarif|html   output format (default terminal)
+  --format terminal|json|sarif|html|markdown
+                                      output format (default terminal)
   --output FILE                       write the report to FILE instead of stdout
+  --summary FILE                      also append a Markdown summary to FILE
   --min-grade A|B|C|D                 exit with status 1 if the grade is worse
   --fix PLATFORM                      print fixes for nginx, apache, caddy, nextjs, vercel or netlify
   --ignore ID[,ID...]                 leave these findings out of the grade (repeatable)
@@ -105,6 +107,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("scan", stderr)
 	format := fs.String("format", "terminal", "")
 	output := fs.String("output", "", "")
+	summaryFile := fs.String("summary", "", "")
 	minGrade := fs.String("min-grade", "", "")
 	fix := fs.String("fix", "", "")
 	noColor := fs.Bool("no-color", false, "")
@@ -133,7 +136,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	switch {
 	case len(urls) != 1:
 		return fail("expected exactly one URL, got %d (see shieldcheck help)", len(urls))
-	case !slices.Contains([]string{"terminal", "json", "sarif", "html"}, *format):
+	case !slices.Contains([]string{"terminal", "json", "sarif", "html", "markdown"}, *format):
 		return fail("unknown --format %q", *format)
 	case !slices.Contains([]string{"", "A", "B", "C", "D"}, *minGrade):
 		return fail("--min-grade must be A, B, C or D")
@@ -173,6 +176,8 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 		err = report.SARIF(out, rep)
 	case "html":
 		err = report.HTML(out, report.Page{Report: rep})
+	case "markdown":
+		err = report.Markdown(out, rep)
 	default:
 		// shortcut: no colour on Windows, where a console only understands ANSI
 		// codes after SetConsoleMode; add that call if colour is wanted there.
@@ -185,6 +190,11 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail("writing report: %v", err)
 	}
+	if *summaryFile != "" {
+		if err := appendSummary(*summaryFile, rep); err != nil {
+			return fail("writing summary: %v", err)
+		}
+	}
 	if *output != "" {
 		fmt.Fprintf(stderr, "Grade %s (%d/100) for %s, report written to %s\n", rep.Grade, rep.Score, rep.FinalURL, *output)
 	}
@@ -193,6 +203,19 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// appendSummary appends rather than overwrites, as $GITHUB_STEP_SUMMARY expects.
+func appendSummary(name string, rep *scan.Report) error {
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	if err := report.Markdown(f, rep); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func isTerminal(w io.Writer) bool {

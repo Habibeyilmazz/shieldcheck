@@ -80,6 +80,18 @@ func TestScanCommand(t *testing.T) {
 		t.Errorf("--ignore: code %d, grade %q, %d ignored, stderr %q", code, rep.Grade, len(rep.Ignored), errOut)
 	}
 
+	// --summary appends, as $GITHUB_STEP_SUMMARY needs, next to the main output.
+	summary := filepath.Join(t.TempDir(), "summary.md")
+	os.WriteFile(summary, []byte("earlier step\n"), 0o644)
+	code, out, _ = cli("scan", srv.URL, "--allow-private", "--format", "markdown", "--summary", summary)
+	written, _ := os.ReadFile(summary)
+	if code != 0 || !strings.HasPrefix(out, "## shieldcheck: grade D (") || string(written) != "earlier step\n"+out {
+		t.Errorf("--summary: code %d\nstdout %q\nfile %q", code, out, written)
+	}
+	if code, _, errOut := cli("scan", srv.URL, "--allow-private", "--summary", t.TempDir()); code != 2 || !strings.Contains(errOut, "writing summary") {
+		t.Errorf("--summary to a directory: code %d, stderr %q", code, errOut)
+	}
+
 	file := filepath.Join(t.TempDir(), "report.html")
 	code, out, errOut = cli("scan", srv.URL, "--allow-private", "--format", "html", "--output", file)
 	html, _ := os.ReadFile(file)

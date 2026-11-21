@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -305,5 +306,35 @@ func TestUIIgnoreControls(t *testing.T) {
 	HTML(&file, Page{Report: rep})
 	if strings.Contains(file.String(), "Ignore this finding") || strings.Contains(file.String(), "Grade it again") {
 		t.Error("the report file has links that need the UI")
+	}
+}
+
+func TestMarkdown(t *testing.T) {
+	r := sample()
+	scan.Ignore(r, []string{"spf.missing"})
+	var b bytes.Buffer
+	if err := Markdown(&b, r); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	// The action reads its grade and score outputs from this first line.
+	if first, _, _ := strings.Cut(out, "\n"); first != fmt.Sprintf("## shieldcheck: grade %s (%d/100)", r.Grade, r.Score) {
+		t.Errorf("first line %q", first)
+	}
+	for _, want := range []string{
+		"| High | **No Content Security Policy** | Add one. | csp.missing |",
+		`Server: \<script\>alert(1)\</script\>\[2J\]0;owned/1.0 desrever`, // markup escaped, escape sequences and bidi overrides gone
+		"**Ignored, not graded:** No SPF record (spf.missing)",
+		"<summary>1 passed</summary>", "- HSTS is enabled",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.ContainsAny(out, "\x1b\x07‮‬") || strings.Contains(out, "<script>") {
+		t.Errorf("site content reached the markdown unescaped:\n%s", out)
+	}
+	if got := md("a|b\nc [x](y) `z` <i>&amp;"); got != `a\|b c \[x\](y) \`+"`"+`z\`+"`"+` \<i\>\&amp;` {
+		t.Errorf("md: %s", got)
 	}
 }
