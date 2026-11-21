@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `--ignore ID[,ID...]` (repeatable) and the action input `ignore`: accept a
+  finding you have decided to live with, such as `coop.missing` on a site that
+  needs OAuth pop-ups or `tls.legacy-protocol` set by a CDN plan. Ignored
+  findings do not count towards the score, the grade or `--min-grade`, and no
+  longer go into the combined header snippet. They are still shown: an
+  "Ignored, not graded" list in the terminal and HTML reports, `ignored` in
+  JSON, `runs[0].properties.ignored` in SARIF (left out of the results).
+  An ID that matches nothing is named in a warning on stderr.
+- The HTML report and web UI show each finding's ID under its title, so it can
+  be copied into `--ignore`.
+
+### Notes for whoever works on this next (feature round)
+
+- Why this feature: with `--min-grade` in CI, a site that cannot or will not
+  fix one finding had no way to pass the gate except lowering the grade for
+  everything. It is CLI and action only; the web UI has no ignore field.
+- `scan.Ignore` regrades through the same `finish` the scan uses. CI's
+  `action` job checks it end to end (D fixture, two IDs ignored, `min-grade: B`
+  passes).
+- SARIF suppressions (`suppressions: [{kind: external}]`) would be the
+  standard way to carry ignored results; they were not used because how
+  GitHub code scanning displays them was not verified.
+- Commits from this round carry a `Co-Authored-By: Claude Opus 5.5` line,
+  the model that actually wrote them.
+
 ### Security
 
 A security pass over the whole repository. The scanner code itself had

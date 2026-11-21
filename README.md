@@ -83,6 +83,7 @@ shieldcheck scan <url> [flags]
   --output FILE                       write the report to FILE instead of stdout
   --min-grade A|B|C|D                 exit with status 1 if the grade is worse
   --fix PLATFORM                      print fixes for nginx, apache, caddy, nextjs, vercel or netlify
+  --ignore ID[,ID...]                 leave these findings out of the grade (repeatable)
   --probe                             also request /.git/HEAD and /.env
   --allow-private                     allow loopback, private and link-local addresses
   --timeout DURATION                  limit for the whole scan (default 45s)
@@ -105,6 +106,16 @@ shieldcheck scan your-site.example --format json | jq '.findings[] | select(.sev
 shieldcheck scan http://localhost:3000 --allow-private    # your dev server
 shieldcheck scan your-site.example --min-grade B          # for CI: fails below B
 ```
+
+### Accepting a finding
+
+Some findings you will decide to live with: COOP breaks the OAuth pop-up you rely on, or TLS 1.0 is a setting of your CDN plan you cannot change. Pass the finding's ID (printed next to its title in the terminal and the HTML report, `id` in JSON) to `--ignore`, and it no longer counts towards the grade or `--min-grade`:
+
+```sh
+shieldcheck scan your-site.example --min-grade B --ignore coop.missing,tls.legacy-protocol
+```
+
+Ignored findings are still listed, under "Ignored, not graded" in the terminal and HTML reports and in `ignored` in JSON, so the decision stays visible. SARIF leaves them out of the results and names them in the run's `properties.ignored`. Passed checks cannot be ignored. An ID that matches no finding (a typo, or an issue you have since fixed) is named in a warning on stderr; the scan still succeeds.
 
 ### Output formats
 
@@ -137,7 +148,7 @@ jobs:
           min-grade: B
 ```
 
-Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
+Inputs: `url` (required), `min-grade`, `format`, `output`, `ignore` (finding IDs separated by commas, spaces or new lines, see [Accepting a finding](#accepting-a-finding)), `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
 
 To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning (this workflow was run against a test site with v0.1.1 and its upload accepted):
 
