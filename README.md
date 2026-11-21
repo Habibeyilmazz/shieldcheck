@@ -79,8 +79,10 @@ Every finding has a severity, what was observed, the risk in plain English, and 
 
 ```text
 shieldcheck scan <url> [flags]
-  --format terminal|json|sarif|html   output format (default terminal)
+  --format terminal|json|sarif|html|markdown
+                                      output format (default terminal)
   --output FILE                       write the report to FILE instead of stdout
+  --summary FILE                      also append a Markdown summary to FILE
   --min-grade A|B|C|D                 exit with status 1 if the grade is worse
   --fix PLATFORM                      print fixes for nginx, apache, caddy, nextjs, vercel or netlify
   --ignore ID[,ID...]                 leave these findings out of the grade (repeatable)
@@ -125,6 +127,9 @@ In the web UI, each finding has an "Ignore this finding" link and each ignored o
 - **json**: the full report, including every fix for every platform.
 - **sarif**: SARIF 2.1.0, one rule and one result per finding, for GitHub code scanning (see [GitHub Action](#github-action)). A website has no file to point at, so each result's location is the site written as a path (`your-site.example/`) and the full URL is in the message.
 - **html**: one self-contained file with no external requests. It has the same platform switch and copy buttons as the web UI and works offline.
+- **markdown**: the grade, one table row per finding (severity, what was seen, how to fix it, ID), the ignored findings and the passed checks, for a pull request comment or a CI job summary. It has the plain-English fix, not the per-platform snippets. Text from the scanned site is escaped, so it cannot add links, images or HTML.
+
+`--summary FILE` appends the same Markdown to FILE, creating it if needed, alongside whatever `--format` writes. On GitHub Actions, `--summary "$GITHUB_STEP_SUMMARY"` puts the report on the run's summary page; the action below does this for you.
 
 ### Web UI
 
@@ -144,13 +149,27 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: Habibeyilmazz/shieldcheck@v0.1.3
+      - uses: Habibeyilmazz/shieldcheck@v0.1.4
         with:
           url: https://your-site.example
           min-grade: B
 ```
 
-Inputs: `url` (required), `min-grade`, `format`, `output`, `ignore` (finding IDs separated by commas, spaces or new lines, see [Accepting a finding](#accepting-a-finding)), `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
+Inputs: `url` (required), `min-grade`, `format`, `output`, `ignore` (finding IDs separated by commas, spaces or new lines, see [Accepting a finding](#accepting-a-finding)), `probe`, `allow-private`, `summary` (default `true`; `false` keeps the report off the job summary page).
+
+Every run adds the grade and the findings table to the job summary, and sets two outputs, `grade` (A to F) and `score` (0 to 100), also when `min-grade` fails the step. They are empty only if the scan could not run. For example, to keep a record or post it elsewhere:
+
+```yaml
+      - uses: Habibeyilmazz/shieldcheck@v0.1.4
+        id: shieldcheck
+        with:
+          url: https://your-site.example
+      - run: echo "Graded $GRADE ($SCORE/100)"
+        env:
+          GRADE: ${{ steps.shieldcheck.outputs.grade }}
+          SCORE: ${{ steps.shieldcheck.outputs.score }}
+```
+ The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
 
 To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning (this workflow was run against a test site with v0.1.1 and its upload accepted):
 
@@ -163,7 +182,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v5
-      - uses: Habibeyilmazz/shieldcheck@v0.1.3
+      - uses: Habibeyilmazz/shieldcheck@v0.1.4
         with:
           url: https://your-site.example
           format: sarif
@@ -240,7 +259,6 @@ Hosted scanners are convenient but cannot reach a dev server or a staging site b
 - A container image
 - Subresource Integrity check for third-party scripts and styles
 - Analyse every Content-Security-Policy header, not just the first
-- Job summary and grade outputs for the GitHub Action
 - DNSSEC and CAA record checks
 - Scan a list of URLs in one run
 

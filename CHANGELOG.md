@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-22
+
+This release adds the Markdown report and the action's job summary and
+outputs, plus the unreleased fixes from rounds 10 and 11 below.
+
+### Added (feature round 12)
+
+- `--format markdown`: the grade, a table of findings (severity, what was
+  seen, how to fix it, ID), ignored findings and passed checks, for a pull
+  request comment or a job summary. Text from the scanned site is
+  backslash-escaped so it cannot add markup, links, images or raw HTML.
+- `--summary FILE` appends that Markdown to FILE next to the normal output,
+  for `$GITHUB_STEP_SUMMARY`.
+- GitHub Action: every run adds the report to the job summary (input
+  `summary: "false"` turns it off) and sets outputs `grade` and `score`, also
+  when `min-grade` fails the step. CI checks the outputs on the failing gate.
+
+### Notes (feature round 12)
+
+- Picked because a CI user of the action saw nothing but a pass/fail and a log;
+  it was on the roadmap. The action reads `grade`/`score` from the summary's
+  first line, `## shieldcheck: grade X (N/100)`; a test pins that line.
+- Checked by running the action's script locally against a fixture on 4116
+  with and without a failing `min-grade`, and the CLI against example.com.
+- Still open: SARIF suppressions (ignored findings are left out of results
+  rather than marked suppressed), Windows console colour, `go.mod` at `go 1.25`
+  (the minimum supported Go, not a bug).
+- Commits from this round are co-authored by Claude Opus 5.5.
+
 ### Security (security round 11)
 
 - Terminal report: bidi control characters (U+202E and friends, "Trojan
