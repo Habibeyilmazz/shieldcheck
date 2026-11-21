@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+A security pass over the whole repository. The scanner code itself had
+nothing to fix; the changes are to CI and the action.
+
+- Every third-party action in the workflows and in `action.yml` is pinned to
+  a full commit SHA (the tag is in a comment), so a moved tag cannot change
+  what runs with the job's token. `actions/checkout` runs with
+  `persist-credentials: false`. A test (`TestWorkflowsPinActionsAndDropCredentials`)
+  fails if either slips back.
+- New CI job `vulncheck`: `govulncheck` (pinned to v1.9.0) on the latest
+  stable Go, the same Go the release binaries are built with.
+
+### Notes for whoever works on this next (security pass)
+
+- Checked by running, found fine: the SSRF guard against decimal, hex,
+  short-form and IPv4-mapped loopback, `0`, metadata `169.254.169.254`,
+  `fd00::/8` and a public name resolving to `::1`; `serve` refusing a foreign
+  `Host`, cross-site and same-site `Sec-Fetch-Site`, a `/scan` without the
+  header and POST; a `<script>` URL is escaped in the page. Terminal output
+  strips control characters from everything taken from the site (recommended
+  header values are constants). The git history has no secrets and one
+  author identity.
+- govulncheck on a local Go 1.27.3 reports GO-2026-6859 (standard library
+  `net/http`, fixed in 1.27.4). Our code is not changed by it; binaries built
+  with a patched Go do not have it. `go.mod` still says `go 1.25`, which the
+  Go team no longer patches, so a `go install` with an old Go gets an
+  unpatched standard library.
+- The README's example workflows still use tags (`actions/checkout@v5`,
+  `upload-sarif@v4`, this action at a tag) to stay readable. Users may want
+  to pin them.
+- The leftover processes on ports 4110-4114 from an earlier session were
+  left running; this pass did not start them, so it did not stop them.
+
 A design and UX pass on the web UI and the HTML report: screenshots at
 1280px and 390px in light and dark, an axe-core run (WCAG 2.2 AA and best
 practice) on the home, report and error pages, and the CLI error messages.
