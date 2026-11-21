@@ -81,7 +81,7 @@ body.busy .error, body.busy .layout { opacity: .45; }
 .counts span, .sev { color: var(--sev); font-weight: 700; }
 
 .platform { border: 0; min-width: 0; }
-.platform legend, .downloads h2 { padding: 0; font-size: 1rem; font-weight: 700; margin-bottom: .4rem; }
+.platform legend, .downloads .t { padding: 0; font-size: 1rem; font-weight: 700; margin-bottom: .4rem; }
 .platform div { display: flex; flex-wrap: wrap; gap: .35rem; }
 .platform input { position: absolute; opacity: 0; }
 .platform label { padding: .2rem .7rem; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); cursor: pointer; }
@@ -188,7 +188,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{end}}
     {{if $.Serve}}
     <div class="downloads">
-      <h2>Download report</h2>
+      <p class="t">Download report</p>
       <a href="{{$.Link $.Ignore "html"}}" download>HTML</a>
       <a href="{{$.Link $.Ignore "json"}}" download>JSON</a>
       <a href="{{$.Link $.Ignore "sarif"}}" download>SARIF</a>
@@ -215,7 +215,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     <article class="finding s-{{.Severity}}" id="{{.ID}}">
       <span class="sev">{{index $.Labels .Severity}}</span>
       <h3>{{.Title}}</h3>
-      <code class="fid">{{.ID}}</code>{{if $.Serve}} <a class="act" href="{{$.IgnoreLink .ID}}" aria-label="Ignore {{.ID}}">Ignore this finding</a>{{end}}
+      <code class="fid">{{.ID}}</code>{{if $.Serve}} <a class="act" href="{{$.IgnoreLink .ID}}" aria-label="Ignore this finding, {{.ID}}">Ignore this finding</a>{{end}}
       {{if .Detail}}<p class="seen">{{.Detail}}</p>{{end}}
       {{if .Risk}}<p>{{.Risk}}</p>{{end}}
       {{if or .Advice .Fixes}}
@@ -238,7 +238,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{if .Ignored}}
     <h2>Ignored, not graded</h2>
     <ul class="passed ignored">
-      {{range .Ignored}}<li>{{.Title}}<small>{{index $.Labels .Severity}} · <code>{{.ID}}</code>{{if $.Serve}} · <a href="{{$.UnignoreLink .ID}}" aria-label="Grade {{.ID}} again">Grade it again</a>{{end}}</small></li>{{end}}
+      {{range .Ignored}}<li>{{.Title}}<small>{{index $.Labels .Severity}} · <code>{{.ID}}</code>{{if $.Serve}} · <a href="{{$.UnignoreLink .ID}}" aria-label="Grade it again, {{.ID}}">Grade it again</a>{{end}}</small></li>{{end}}
     </ul>
     {{if $.Serve}}
     <figure class="fix cmd"><figcaption><span>The same grade from the command line or CI (the GitHub Action takes the same IDs as its ignore input)</span></figcaption><pre tabindex="0"><code>{{$.Command}}</code></pre></figure>

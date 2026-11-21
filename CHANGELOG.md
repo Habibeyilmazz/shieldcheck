@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed (perf-a11y round)
+
+- Web UI: the "--ignore" CLI line now includes `--allow-private` when `serve`
+  runs with it, so the copied command reproduces the grade.
+- Web UI accessibility: "Download report" was an h2 before the h1 (heading
+  order was h2, h1, h2...), now plain text; the ignore and "Grade it again"
+  links' accessible names start with their visible text (WCAG 2.5.3).
+
+### Notes (perf-a11y round)
+
+- Measured, nothing to fix: release binary 9.5 MB stripped (13.9 MB unstripped
+  dev build; release.yml already uses `-s -w -trimpath`); `version` starts in
+  under 10 ms; the web UI report page is 20 KB with no external requests, 50 ms
+  per page view on loopback; no horizontal scroll at 320 px; text contrast
+  passes 4.5:1 in light and dark (checked by script in Chromium, no axe or
+  Lighthouse installed); every control has a name. No unused code or
+  dependencies found (stdlib only, `go vet` clean).
+- Still open: SARIF suppressions (adding ignored findings as results with
+  `suppressions` is valid SARIF, but how GitHub code scanning treats them is
+  unverified, and getting it wrong would open alerts for ignored findings, so
+  they stay out); Windows console untested. Processes on 4110-4114 were not
+  started by this round and were left alone; this round used 4115 and stopped it.
+- Commits from this round are co-authored by Claude Fable 5.2.
+
 ### Added (feature round 2)
 
 - Web UI ignore list, the same as `--ignore`: "Ignore this finding" on each
@@ -25,8 +49,7 @@ All notable changes to this project are documented here. The format follows
 - Checked in Chromium against a local fixture: ignore two findings (F to C,
   about 100 ms, no rescan), the copy button copies the command, rescanning
   keeps the list, another URL drops it, "Grade it again" restores the grade.
-- The CLI line does not add `--allow-private`, even when the UI runs with it;
-  the CLI then says to add it.
+- (Fixed in the perf-a11y round: the CLI line now carries `--allow-private`.)
 - Still open: SARIF suppressions (not verified how GitHub shows them),
   Windows console. This round did not start the processes on 4110-4114 and
   left them alone. Commits are co-authored by Claude Opus 5.5.
