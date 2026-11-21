@@ -266,7 +266,9 @@ type Page struct {
 	Error  string
 	// ProbeAllowed shows the probe checkbox; Probe is its state.
 	ProbeAllowed, Probe bool
-	Nonce               string // CSP nonce for the inline style and script
+	// AllowPrivate is set when serve runs with --allow-private; the CLI line then needs it too.
+	AllowPrivate bool
+	Nonce        string // CSP nonce for the inline style and script
 	// Ignore is the UI's ignore list; Unmatched the IDs in it that matched nothing.
 	Ignore, Unmatched []string
 }
@@ -304,6 +306,9 @@ func (p Page) Command() string {
 	cmd := "shieldcheck scan " + target
 	if p.Probe {
 		cmd += " --probe"
+	}
+	if p.AllowPrivate {
+		cmd += " --allow-private"
 	}
 	var ids []string
 	if p.Report != nil {

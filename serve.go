@@ -85,7 +85,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	nonce := make([]byte, 16)
 	rand.Read(nonce)
-	page := report.Page{Serve: true, ProbeAllowed: s.probeAllowed, Nonce: hex.EncodeToString(nonce)}
+	page := report.Page{Serve: true, ProbeAllowed: s.probeAllowed, AllowPrivate: s.opts.AllowPrivate, Nonce: hex.EncodeToString(nonce)}
 	h := w.Header()
 	h.Set("Content-Security-Policy", fmt.Sprintf("default-src 'none'; style-src 'nonce-%[1]s'; script-src 'nonce-%[1]s'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", page.Nonce))
 	h.Set("X-Content-Type-Options", "nosniff")

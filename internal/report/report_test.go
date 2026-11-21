@@ -289,6 +289,10 @@ func TestUIIgnoreControls(t *testing.T) {
 		t.Errorf("Command = %s\nwant      %s", got, want)
 	}
 
+	if got := (Page{URL: "http://127.0.0.1:1/", AllowPrivate: true}).Command(); !strings.Contains(got, " --allow-private --ignore") {
+		t.Errorf("Command without --allow-private: %s", got)
+	}
+
 	var ui bytes.Buffer
 	HTML(&ui, p)
 	out := ui.String()
