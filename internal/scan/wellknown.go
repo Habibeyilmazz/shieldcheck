@@ -39,7 +39,12 @@ func checkSecurityTxt(ctx context.Context, c *client, final *url.URL) []Finding 
 		return []Finding{f("securitytxt.no-expires", Low, "security.txt has no Expires field", u.String(),
 			"RFC 9116 requires an Expires date so that researchers can tell whether the contact details are still current.", advice, fix)}
 	}
-	if t, err := time.Parse(time.RFC3339, string(m[1])); err != nil || t.Before(time.Now()) {
+	t, err := time.Parse(time.RFC3339, string(m[1]))
+	if err != nil {
+		return []Finding{f("securitytxt.malformed-expires", Low, "security.txt has an Expires date that cannot be read", "Expires: "+clip(string(m[1])),
+			"RFC 9116 wants a full date and time such as 2030-12-31T23:59:59Z. Tools that read the file may treat anything else as expired.", "Write the Expires field as an ISO 8601 timestamp ending in Z. "+advice, fix)}
+	}
+	if t.Before(time.Now()) {
 		return []Finding{f("securitytxt.expired", Low, "security.txt has expired", "Expires: "+clip(string(m[1])),
 			"An expired security.txt signals that the contact details may be stale, so researchers may not trust them.", "Update the Expires date; a year ahead at most. "+advice, fix)}
 	}

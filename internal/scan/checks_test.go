@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeURL(t *testing.T) {
@@ -223,13 +226,13 @@ func TestHTTPRedirectFinding(t *testing.T) {
 
 func TestMailDomains(t *testing.T) {
 	cases := map[string][]string{
-		"www.example.com":       {"example.com"},
-		"app.eu.example.com":    {"app.eu.example.com", "eu.example.com", "example.com"},
-		"Example.COM.":          {"example.com"},
-		"127.0.0.1":             nil,
-		"::1":                   nil,
-		"localhost":             nil,
-		"dev.localhost":         nil,
+		"www.example.com":    {"example.com"},
+		"app.eu.example.com": {"app.eu.example.com", "eu.example.com", "example.com"},
+		"Example.COM.":       {"example.com"},
+		"127.0.0.1":          nil,
+		"::1":                nil,
+		"localhost":          nil,
+		"dev.localhost":      nil,
 		// Deep names are capped at four lookups but must still reach the registrable domain.
 		"a.b.c.d.e.example.com": {"a.b.c.d.e.example.com", "d.e.example.com", "e.example.com", "example.com"},
 		// The walk stops at the registrable domain, not at the registry above it.
@@ -352,5 +355,27 @@ func TestClip(t *testing.T) {
 	}
 	if got := clip("ok\xff\xfe"); got != "ok?" {
 		t.Errorf("clip invalid UTF-8 = %q", got)
+	}
+}
+
+func TestSecurityTxt(t *testing.T) {
+	future := time.Now().AddDate(1, 0, 0).UTC().Format(time.RFC3339)
+	cases := []struct{ name, body, want string }{
+		{"ok", "Contact: mailto:a@b.example\nExpires: " + future + "\n", "securitytxt.ok"},
+		{"crlf and case", "contact: mailto:a@b.example\r\nEXPIRES: " + future + "\r\n", "securitytxt.ok"},
+		{"expired", "Contact: mailto:a@b.example\nExpires: 2001-01-01T00:00:00Z\n", "securitytxt.expired"},
+		{"no expires", "Contact: mailto:a@b.example\n", "securitytxt.no-expires"},
+		{"soft 404", "<html>Contact: nobody</html>", "securitytxt.missing"},
+		// A date without a time is not RFC 3339; it is malformed, not expired.
+		{"malformed expires", "Contact: mailto:a@b.example\nExpires: 2999-01-01\n", "securitytxt.malformed-expires"},
+	}
+	for _, tc := range cases {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, tc.body) }))
+		u, _ := url.Parse(srv.URL)
+		got := checkSecurityTxt(t.Context(), newClient(Options{AllowPrivate: true}), u)
+		srv.Close()
+		if len(got) != 1 || got[0].ID != tc.want {
+			t.Errorf("%s: got %v, want %s", tc.name, got, tc.want)
+		}
 	}
 }
