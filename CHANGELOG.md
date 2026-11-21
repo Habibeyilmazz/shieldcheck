@@ -4,6 +4,47 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+A design and UX pass on the web UI and the HTML report: screenshots at
+1280px and 390px in light and dark, an axe-core run (WCAG 2.2 AA and best
+practice) on the home, report and error pages, and the CLI error messages.
+
+### Fixed
+
+- Scanning `http://site` for a site that has working HTTPS was graded as
+  "no HTTPS" (critical). The scan now tries the same address on `https://`
+  and, if a browser would accept its certificate, grades that, so the result
+  matches scanning `https://site`: the missing redirect (high).
+- Fix snippets wider than the column could only be scrolled with a mouse.
+  They can now be focused and scrolled with the keyboard.
+- The page had no `<main>` landmark around the form and the intro; there is
+  now exactly one.
+
+### Changed
+
+- While a scan runs, the web UI shows a status line ("Scanning ...", with a
+  spinner that stands still under reduced motion, announced to screen
+  readers) and dims the previous result, instead of only relabelling the
+  button.
+- A scan that cannot start says why in plain words before the network error:
+  nothing listening at the address, a hostname that does not exist, or no
+  answer in time. A URL that does not parse no longer repeats itself inside
+  Go's parse error. Both the CLI and the web UI show this.
+- README screenshots retaken from the running UI (one real scan of
+  example.com); the findings shot is now the dark theme.
+
+### Notes for whoever works on this next
+
+- Checked and left alone: typography, spacing, focus rings, the platform
+  switch, colour contrast (axe finds no violations now), the 390px layout,
+  print styles, the terminal report. The UI has no other motion.
+- The axe and screenshot scripts were throwaway and are not in the repo.
+  To look at the UI, run `shieldcheck serve --port 4115 --allow-private` and
+  any local fixture server.
+- Still true: the Windows binary has not been run in a real console; no
+  container image.
+
 ## [0.1.2] - 2026-11-22
 
 A second independent first-run review: fresh clone, the release archive and

@@ -120,9 +120,9 @@ shieldcheck serve
 # shieldcheck UI on http://127.0.0.1:4110 (Ctrl+C to stop)
 ```
 
-The UI runs the same scan and renders the same report, with download links for the HTML, JSON and SARIF versions. It follows your system's light or dark setting.
+The UI runs the same scan and renders the same report, with download links for the HTML, JSON and SARIF versions. It follows your system's light or dark setting. While a scan runs, a status line names the URL being scanned; a scan that cannot start (nothing listening, a hostname that does not exist, a timeout, a private address) says why in plain words.
 
-![Findings for example.com in the web UI with the Next.js fixes selected](docs/screenshots/findings.png)
+![Findings for example.com in the web UI in dark mode, with the Next.js fixes selected](docs/screenshots/findings.png)
 
 ### GitHub Action
 
@@ -184,6 +184,7 @@ shieldcheck is strictly passive. One scan makes:
 
 - one GET for the page, following up to 10 redirects by hand so every hop's headers and cookies are seen
 - one GET to `http://<host>/` to see whether plain HTTP redirects to HTTPS, plus one per redirect that stays on `http://` (skipped when the scan started on `http://` or uses a non-standard port)
+- when an `http://` address is not redirected to HTTPS: one more TLS handshake and GET for the same address on `https://`; if a browser would accept its certificate, that page is graded, as if `https://` had been typed
 - five TLS handshakes: one to read the certificate, then one each for TLS 1.0, 1.1, 1.2 and 1.3, plus one for each other HTTPS host in the redirect chain
 - one GET for `/.well-known/security.txt`
 - TXT lookups for SPF and DMARC on the hostname and its parent domains
