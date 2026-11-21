@@ -257,7 +257,11 @@ func SARIF(w io.Writer, r *scan.Report) error {
 		location = strings.ReplaceAll(u.Hostname(), ":", "-") + u.EscapedPath()
 	}
 	rules, results := []obj{}, []obj{}
-	for _, f := range r.Findings {
+	// Ignored findings are results marked as suppressed, so code scanning
+	// shows them as dismissed instead of losing the decision.
+	all := make([]scan.Finding, 0, len(r.Findings)+len(r.Ignored))
+	all = append(append(all, r.Findings...), r.Ignored...)
+	for i, f := range all {
 		if f.Severity == scan.Pass {
 			continue
 		}
@@ -274,13 +278,17 @@ func SARIF(w io.Writer, r *scan.Report) error {
 			"defaultConfiguration": obj{"level": level[f.Severity]},
 			"properties":           obj{"tags": []string{"security", f.Category}, "security-severity": score[f.Severity]},
 		})
-		results = append(results, obj{
+		res := obj{
 			"ruleId":    f.ID,
 			"ruleIndex": len(rules) - 1,
 			"level":     level[f.Severity],
 			"message":   obj{"text": strings.TrimSpace(f.Title+". "+f.Detail) + " (" + r.FinalURL + ")"},
 			"locations": []obj{{"physicalLocation": obj{"artifactLocation": obj{"uri": location}}}},
-		})
+		}
+		if i >= len(r.Findings) {
+			res["suppressions"] = []obj{{"kind": "external", "status": "accepted", "justification": "Ignored with --ignore or in the web UI."}}
+		}
+		results = append(results, res)
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -293,8 +301,7 @@ func SARIF(w io.Writer, r *scan.Report) error {
 				"informationUri": "https://github.com/Habibeyilmazz/shieldcheck",
 				"rules":          rules,
 			}},
-			"results": results,
-			// Ignored findings are left out of the results, as they are left out of the grade.
+			"results":    results,
 			"properties": obj{"grade": r.Grade, "score": r.Score, "target": r.Target, "ignored": ignoredIDs(r)},
 		}},
 	})

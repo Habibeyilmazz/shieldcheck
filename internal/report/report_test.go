@@ -249,7 +249,10 @@ func TestIgnoredFindingsAreShownButNotGraded(t *testing.T) {
 	SARIF(&sarif, rep)
 	var doc struct {
 		Runs []struct {
-			Results    []struct{ RuleID string }
+			Results []struct {
+				RuleID       string
+				Suppressions []struct{ Kind, Status string }
+			}
 			Properties struct{ Ignored []string }
 		}
 	}
@@ -257,8 +260,9 @@ func TestIgnoredFindingsAreShownButNotGraded(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range doc.Runs[0].Results {
-		if r.RuleID == "coop.missing" {
-			t.Error("an ignored finding is a SARIF result")
+		sup := len(r.Suppressions) == 1 && r.Suppressions[0].Kind == "external" && r.Suppressions[0].Status == "accepted"
+		if (r.RuleID == "coop.missing") != sup {
+			t.Errorf("result %s: suppressions = %v", r.RuleID, r.Suppressions)
 		}
 	}
 	if got := doc.Runs[0].Properties.Ignored; len(got) != 1 || got[0] != "coop.missing" {

@@ -119,7 +119,7 @@ Some findings you will decide to live with: COOP breaks the OAuth pop-up you rel
 shieldcheck scan your-site.example --min-grade B --ignore coop.missing,tls.legacy-protocol
 ```
 
-Ignored findings are still listed, under "Ignored, not graded" in the terminal and HTML reports and in `ignored` in JSON, so the decision stays visible. SARIF leaves them out of the results and names them in the run's `properties.ignored`. Passed checks cannot be ignored. An ID that matches no finding (a typo, or an issue you have since fixed) is named in a warning on stderr; the scan still succeeds.
+Ignored findings are still listed, under "Ignored, not graded" in the terminal and HTML reports and in `ignored` in JSON, so the decision stays visible. SARIF keeps them as results marked `suppressions` (accepted), which code scanning shows as dismissed, and names them in the run's `properties.ignored`. Passed checks cannot be ignored. An ID that matches no finding (a typo, or an issue you have since fixed) is named in a warning on stderr; the scan still succeeds.
 
 In the web UI, each finding has an "Ignore this finding" link and each ignored one a "Grade it again" link. These regrade the report already on screen without scanning the site again. Under the ignored list the UI prints the matching `shieldcheck scan ... --ignore ...` command to copy into CI. Scanning the same URL again from the form keeps the list; typing a different URL starts without it.
 
