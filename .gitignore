@@ -1,0 +1,14 @@
+/shieldcheck
+/shieldcheck.exe
+/dist/
+*.test
+*.out
+.env
+.env.*
+.DS_Store
+node_modules/
+/report.html
+/report.json
+/report.sarif
+.idea/
+.vscode/
