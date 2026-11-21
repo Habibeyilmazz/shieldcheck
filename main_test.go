@@ -59,7 +59,7 @@ func TestScanCommand(t *testing.T) {
 		t.Fatalf("json scan: code %d, err %v, grade %q", code, err, rep.Grade)
 	}
 
-	code, out, _ = cli(srv.URL, "--allow-private", "--fix", "netlify") // "scan" is optional
+	code, out, _ = cli(srv.URL, "--allow-private", "--fix", "Netlify") // "scan" is optional, platform names are not case-sensitive
 	if code != 0 || !strings.Contains(out, "Grade D") || !strings.Contains(out, "[[headers]]") || strings.Contains(out, "\x1b[") {
 		t.Errorf("terminal scan: code %d\n%s", code, out)
 	}

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -118,7 +119,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "shieldcheck: "+format+"\n", a...)
 		return 2
 	}
-	*minGrade = strings.ToUpper(*minGrade)
+	*minGrade, *fix = strings.ToUpper(*minGrade), strings.ToLower(*fix)
 	switch {
 	case len(urls) != 1:
 		return fail("expected exactly one URL, got %d (see shieldcheck help)", len(urls))
@@ -158,7 +159,9 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	case "html":
 		err = report.HTML(out, report.Page{Report: rep})
 	default:
-		color := !*noColor && *output == "" && os.Getenv("NO_COLOR") == "" && isTerminal(stdout)
+		// shortcut: no colour on Windows, where a console only understands ANSI
+		// codes after SetConsoleMode; add that call if colour is wanted there.
+		color := !*noColor && *output == "" && os.Getenv("NO_COLOR") == "" && runtime.GOOS != "windows" && isTerminal(stdout)
 		err = report.Terminal(out, rep, report.TerminalOptions{Color: color, Platform: *fix})
 	}
 	if err != nil {

@@ -62,6 +62,39 @@ func TestTerminal(t *testing.T) {
 	}
 }
 
+func TestTerminalPrintsHeaderConfigOnce(t *testing.T) {
+	header := func(id, name, value string) scan.Finding {
+		return scan.Finding{ID: id, Category: "headers", Severity: scan.Low, Title: "No " + name, Header: &scan.Header{Name: name, Value: value},
+			Fixes: []scan.Fix{{Platform: "nginx", Where: "nginx", Snippet: "add_header " + name + " \"" + value + "\" always;"}}}
+	}
+	rep := sample()
+	rep.Findings = append(rep.Findings, header("xcto.missing", "X-Content-Type-Options", "nosniff"), header("referrer.missing", "Referrer-Policy", "no-referrer"))
+	rep.HeaderFixes = []scan.Fix{
+		{Platform: "nginx", Where: "nginx", Snippet: "add_header X-Content-Type-Options \"nosniff\" always;\nadd_header Referrer-Policy \"no-referrer\" always;"},
+		{Platform: "caddy", Where: "Caddyfile", Snippet: "header X-Content-Type-Options \"nosniff\""},
+	}
+	var b bytes.Buffer
+	Terminal(&b, rep, TerminalOptions{Platform: "nginx"})
+	out := b.String()
+	if n := strings.Count(out, "add_header X-Content-Type-Options"); n != 1 {
+		t.Errorf("the nosniff config is printed %d times, want once in the combined snippet:\n%s", n, out)
+	}
+	for _, want := range []string{"AS ONE SNIPPET", "Fix: send Referrer-Policy: no-referrer", "add_header Referrer-Policy", "add_header Content-Security-Policy"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("terminal output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "header X-Content-Type-Options \"nosniff\"\n") && strings.Contains(out, "Caddyfile") {
+		t.Errorf("another platform's combined snippet was printed:\n%s", out)
+	}
+
+	b.Reset()
+	Terminal(&b, rep, TerminalOptions{})
+	if strings.Contains(b.String(), "AS ONE SNIPPET") {
+		t.Error("combined snippet printed without --fix")
+	}
+}
+
 func TestWrap(t *testing.T) {
 	got := wrap("one two three four five", "  ", 9)
 	if got != "  one two\n  three\n  four five" {

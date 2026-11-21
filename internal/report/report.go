@@ -103,6 +103,15 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 	}
 
 	const indent = "            "
+	printFix := func(fix scan.Fix) {
+		p("%s%s\n", indent, paint("2", sanitize(fix.Where)+":"))
+		for line := range strings.SplitSeq(sanitize(fix.Snippet), "\n") {
+			p("%s  %s\n", indent, paint("36", line))
+		}
+	}
+	// With several headers to add, their config is printed once, together,
+	// instead of as near-identical blocks under every finding.
+	combined := o.Platform != "" && len(r.HeaderFixes) > 0
 	for _, f := range r.Findings {
 		if f.Severity == scan.Pass {
 			continue
@@ -123,12 +132,17 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 			p("%s\n", wrap(advice, indent, 66))
 		}
 		for _, fix := range f.Fixes {
-			if o.Platform == "" || (fix.Platform != "any" && fix.Platform != o.Platform) {
+			if o.Platform == "" || (fix.Platform != "any" && fix.Platform != o.Platform) || (combined && f.Header != nil) {
 				continue
 			}
-			p("%s%s\n", indent, paint("2", sanitize(fix.Where)+":"))
-			for line := range strings.SplitSeq(sanitize(fix.Snippet), "\n") {
-				p("%s  %s\n", indent, paint("36", line))
+			printFix(fix)
+		}
+	}
+	if combined {
+		p("\n  %s\n", paint("1", "ALL HEADERS TO ADD, AS ONE SNIPPET"))
+		for _, fix := range r.HeaderFixes {
+			if fix.Platform == o.Platform {
+				printFix(fix)
 			}
 		}
 	}
