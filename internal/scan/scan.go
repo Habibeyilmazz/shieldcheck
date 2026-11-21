@@ -175,7 +175,11 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 		}
 	}
 	if err != nil {
-		return nil, err
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // drop the 'Get "url":' prefix; the URL is named below
+		}
+		return nil, fmt.Errorf("could not fetch %s: %w", target, err)
 	}
 	p := &page{hops: hops, final: hops[len(hops)-1], body: body}
 
