@@ -235,7 +235,7 @@ func TestMailDomains(t *testing.T) {
 		"www.example.com.tr": {"example.com.tr"},
 		"shop.example.co.uk": {"shop.example.co.uk", "example.co.uk"},
 		"example.co":         {"example.co"},
-		"com.tr":             nil,
+		"www.gov.uk":         {"gov.uk"}, // a site of its own, and the one that was asked about
 	}
 	for host, want := range cases {
 		if got := mailDomains(host); !slices.Equal(got, want) {

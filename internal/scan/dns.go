@@ -35,8 +35,8 @@ func mailDomains(host string) []string {
 	}
 	labels := strings.Split(strings.TrimPrefix(host, "www."), ".")
 	shortest := 2
-	if n := len(labels); len(labels[n-1]) == 2 && slices.Contains(secondLevel, labels[n-2]) {
-		shortest = 3 // "co.uk" is a registry, not somebody's domain
+	if n := len(labels); n > 2 && len(labels[n-1]) == 2 && slices.Contains(secondLevel, labels[n-2]) {
+		shortest = 3 // "co.uk" is a registry, not the parent domain of example.co.uk
 	}
 	var out []string
 	for i := 0; i+shortest <= len(labels) && len(out) < 4; i++ {
