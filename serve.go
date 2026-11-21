@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -112,18 +113,40 @@ func (s *server) render(w http.ResponseWriter, status int, page report.Page) {
 	report.HTML(w, page)
 }
 
-var unsafeFilename = regexp.MustCompile(`[^a-z0-9.-]+`)
+var (
+	unsafeFilename = regexp.MustCompile(`[^a-z0-9.-]+`)
+	findingID      = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,63}$`)
+)
 
 func (s *server) handleScan(w http.ResponseWriter, r *http.Request, page report.Page) {
 	q := r.URL.Query()
 	page.URL = strings.TrimSpace(q.Get("url"))
 	page.Probe = s.probeAllowed && q.Get("probe") == "1"
+	for id := range strings.SplitSeq(q.Get("ignore"), ",") {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(page.Ignore, id) {
+			page.Ignore = append(page.Ignore, id)
+		}
+	}
+	if len(page.Ignore) > 50 || slices.ContainsFunc(page.Ignore, func(id string) bool { return !findingID.MatchString(id) }) {
+		page.Ignore = nil
+		page.Error = "the ignore list must be up to 50 finding IDs such as coop.missing, separated by commas"
+		s.render(w, http.StatusBadRequest, page)
+		return
+	}
 
-	rep, status, err := s.report(r.Context(), page.URL, page.Probe, q.Get("format") != "")
+	// Downloads and ignore/unignore links reuse the report the page just
+	// showed; submitting the form always rescans.
+	reuse := q.Get("format") != "" || q.Get("regrade") == "1"
+	rep, status, err := s.report(r.Context(), page.URL, page.Probe, reuse)
 	if err != nil {
 		page.Error = err.Error()
 		s.render(w, status, page)
 		return
+	}
+	if len(page.Ignore) > 0 {
+		cp := *rep // the cached report stays ungraded by any ignore list
+		rep = &cp
+		page.Unmatched = scan.Ignore(rep, page.Ignore)
 	}
 	download := func(contentType, ext string) {
 		u, _ := url.Parse(rep.FinalURL)

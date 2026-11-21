@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -254,7 +255,7 @@ func first(a, b string) string {
 //go:embed report.html
 var pageSource string
 
-var pageTmpl = template.Must(template.New("page").Parse(pageSource))
+var pageTmpl = template.Must(template.New("page").Funcs(template.FuncMap{"join": strings.Join}).Parse(pageSource))
 
 // Page is what the HTML template renders. With Serve false it is the
 // self-contained report file; with Serve true it is the local web UI.
@@ -266,6 +267,51 @@ type Page struct {
 	// ProbeAllowed shows the probe checkbox; Probe is its state.
 	ProbeAllowed, Probe bool
 	Nonce               string // CSP nonce for the inline style and script
+	// Ignore is the UI's ignore list; Unmatched the IDs in it that matched nothing.
+	Ignore, Unmatched []string
+}
+
+// Link is the UI address of this scan with the ignore list given, reusing
+// the report just shown. With a format it is that download instead.
+func (p Page) Link(ignore []string, format string) string {
+	q := url.Values{"url": {p.URL}, "regrade": {"1"}}
+	if p.Probe {
+		q.Set("probe", "1")
+	}
+	if len(ignore) > 0 {
+		q.Set("ignore", strings.Join(ignore, ","))
+	}
+	if format != "" {
+		q.Set("format", format)
+	}
+	return "/scan?" + q.Encode()
+}
+
+func (p Page) IgnoreLink(id string) string { return p.Link(append(slices.Clip(p.Ignore), id), "") }
+
+func (p Page) UnignoreLink(id string) string {
+	return p.Link(slices.DeleteFunc(slices.Clone(p.Ignore), func(s string) bool { return s == id }), "")
+}
+
+// Command is the CLI line that reproduces this page's grade, for CI.
+func (p Page) Command() string {
+	target := p.URL
+	if strings.ContainsFunc(target, func(r rune) bool {
+		return !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:/._-", r)
+	}) {
+		target = "'" + strings.ReplaceAll(target, "'", `'\''`) + "'"
+	}
+	cmd := "shieldcheck scan " + target
+	if p.Probe {
+		cmd += " --probe"
+	}
+	var ids []string
+	if p.Report != nil {
+		for _, f := range p.Report.Ignored {
+			ids = append(ids, f.ID)
+		}
+	}
+	return cmd + " --ignore " + strings.Join(ids, ",")
 }
 
 type count struct {

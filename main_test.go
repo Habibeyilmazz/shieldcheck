@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -173,6 +174,38 @@ func TestServeUI(t *testing.T) {
 	// Probing is off unless the server was started with --probe.
 	if get(s, query+"&probe=1", nil); len(s.cache) != 1 {
 		t.Error("probe=1 was honoured without --probe")
+	}
+}
+
+func TestServeIgnore(t *testing.T) {
+	srv := fixture(t)
+	s := newServer()
+	s.opts.AllowPrivate = true
+	query := "/scan?url=" + srv.URL
+
+	get(s, query, nil)
+	cached := s.cache[srv.URL+" false"].rep
+	page := get(s, query+"&regrade=1&ignore=csp.missing,,typo.id", nil)
+	body := page.Body.String()
+	if page.Code != 200 || strings.Contains(body, `aria-label="Grade D"`) || !strings.Contains(body, "Grade it again") || !strings.Contains(body, "<code>typo.id</code>") {
+		t.Errorf("ignoring csp.missing: %d\n%s", page.Code, body)
+	}
+	if s.cache[srv.URL+" false"].rep != cached || len(cached.Ignored) != 0 || cached.Grade != "D" {
+		t.Error("an ignore link rescanned, or changed the cached report")
+	}
+	var rep scan.Report
+	json.Unmarshal(get(s, query+"&ignore=csp.missing&format=json", nil).Body.Bytes(), &rep)
+	if len(rep.Ignored) != 1 || rep.Ignored[0].ID != "csp.missing" {
+		t.Errorf("JSON download ignores %v, want csp.missing", rep.Ignored)
+	}
+	var many []string
+	for i := range 51 {
+		many = append(many, fmt.Sprint("x.", i))
+	}
+	for _, bad := range []string{"%3Cb%3E", "a%20b", strings.Join(many, ",")} {
+		if rec := get(s, query+"&ignore="+bad, nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "finding IDs") {
+			t.Errorf("ignore=%s: status %d", bad, rec.Code)
+		}
 	}
 }
 

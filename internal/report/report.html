@@ -99,6 +99,8 @@ body.busy .error, body.busy .layout { opacity: .45; }
 .finding .sev { font-size: .95rem; }
 .finding p { margin-top: .5rem; max-width: 42rem; }
 .fid { color: var(--muted); font-size: .85rem; }
+.act { font-size: .85rem; margin-left: .6rem; }
+.cmd { margin-top: 1rem; }
 .passed.ignored li { border-left-color: var(--line); }
 .seen { color: var(--muted); overflow-wrap: anywhere; }
 details { margin-top: .75rem; }
@@ -129,7 +131,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
   .scan input[type=text] { flex: none; }
 }
 @media print {
-  .scan, .platform, .downloads, .copy { display: none; }
+  .scan, .platform, .downloads, .copy, .act, .cmd { display: none; }
   .fix[data-p] { display: block !important; }
   .rail { position: static; }
 }
@@ -150,6 +152,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     <input type="text" id="url" name="url" value="{{.URL}}" placeholder="https://your-site.example" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" required{{if not .Report}} autofocus{{end}}>
     <button type="submit">Scan site</button>
   </div>
+  {{if .Ignore}}<input type="hidden" name="ignore" value="{{join .Ignore ","}}">{{end}}
   {{if .ProbeAllowed}}<div class="opt"><input type="checkbox" id="probe" name="probe" value="1"{{if .Probe}} checked{{end}}>
     <label for="probe">Also request /.git/HEAD and /.env to see if they are exposed</label></div>{{end}}
   <p class="note">Scan only sites you own or are authorised to test. A scan takes a few seconds.</p>
@@ -186,9 +189,9 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{if $.Serve}}
     <div class="downloads">
       <h2>Download report</h2>
-      <a href="/scan?url={{$.URL}}{{if $.Probe}}&amp;probe=1{{end}}&amp;format=html" download>HTML</a>
-      <a href="/scan?url={{$.URL}}{{if $.Probe}}&amp;probe=1{{end}}&amp;format=json" download>JSON</a>
-      <a href="/scan?url={{$.URL}}{{if $.Probe}}&amp;probe=1{{end}}&amp;format=sarif" download>SARIF</a>
+      <a href="{{$.Link $.Ignore "html"}}" download>HTML</a>
+      <a href="{{$.Link $.Ignore "json"}}" download>JSON</a>
+      <a href="{{$.Link $.Ignore "sarif"}}" download>SARIF</a>
     </div>
     {{end}}
   </aside>
@@ -212,7 +215,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     <article class="finding s-{{.Severity}}" id="{{.ID}}">
       <span class="sev">{{index $.Labels .Severity}}</span>
       <h3>{{.Title}}</h3>
-      <code class="fid">{{.ID}}</code>
+      <code class="fid">{{.ID}}</code>{{if $.Serve}} <a class="act" href="{{$.IgnoreLink .ID}}" aria-label="Ignore {{.ID}}">Ignore this finding</a>{{end}}
       {{if .Detail}}<p class="seen">{{.Detail}}</p>{{end}}
       {{if .Risk}}<p>{{.Risk}}</p>{{end}}
       {{if or .Advice .Fixes}}
@@ -235,9 +238,13 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{if .Ignored}}
     <h2>Ignored, not graded</h2>
     <ul class="passed ignored">
-      {{range .Ignored}}<li>{{.Title}}<small>{{index $.Labels .Severity}} · <code>{{.ID}}</code></small></li>{{end}}
+      {{range .Ignored}}<li>{{.Title}}<small>{{index $.Labels .Severity}} · <code>{{.ID}}</code>{{if $.Serve}} · <a href="{{$.UnignoreLink .ID}}" aria-label="Grade {{.ID}} again">Grade it again</a>{{end}}</small></li>{{end}}
     </ul>
+    {{if $.Serve}}
+    <figure class="fix cmd"><figcaption><span>The same grade from the command line or CI (the GitHub Action takes the same IDs as its ignore input)</span></figcaption><pre tabindex="0"><code>{{$.Command}}</code></pre></figure>
     {{end}}
+    {{end}}
+    {{if $.Unmatched}}<p class="seen">Matched no finding, so nothing was left out for: {{range $i, $id := $.Unmatched}}{{if $i}}, {{end}}<code>{{$id}}</code> (<a href="{{$.UnignoreLink $id}}">remove</a>){{end}}</p>{{end}}
   </div>
 </div>
 {{else}}{{if .Serve}}
@@ -298,6 +305,8 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     const btn = form.querySelector('button');
     const status = form.querySelector('.status');
     form.addEventListener('submit', () => {
+      // An ignore list belongs to the site it was made for.
+      if (form.ignore && form.url.value.trim() !== form.url.defaultValue.trim()) form.ignore.disabled = true;
       btn.disabled = true;
       btn.textContent = 'Scanning…';
       document.body.classList.add('busy');

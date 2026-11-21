@@ -217,7 +217,7 @@ func TestHTML(t *testing.T) {
 	var ui bytes.Buffer
 	HTML(&ui, Page{Serve: true, ProbeAllowed: true, Nonce: "n0nce", URL: "https://fixture.test/?a=1&b=2", Report: sample()})
 	out = ui.String()
-	for _, want := range []string{`<form class="scan"`, `<style nonce="n0nce">`, `<script nonce="n0nce">`, `name="probe"`, `/scan?url=https%3a%2f%2ffixture.test%2f%3fa%3d1%26b%3d2&amp;format=json`} {
+	for _, want := range []string{`<form class="scan"`, `<style nonce="n0nce">`, `<script nonce="n0nce">`, `name="probe"`, `/scan?format=json&amp;regrade=1&amp;url=https%3A%2F%2Ffixture.test%2F%3Fa%3D1%26b%3D2`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("UI page lacks %q", want)
 		}
@@ -263,5 +263,43 @@ func TestIgnoredFindingsAreShownButNotGraded(t *testing.T) {
 	HTML(&page, Page{Report: rep})
 	if out := page.String(); !strings.Contains(out, "Ignored, not graded") || !strings.Contains(out, "<code>coop.missing</code>") || !strings.Contains(out, `<code class="fid">csp.missing</code>`) {
 		t.Error("HTML report does not show the ignored finding and the finding IDs")
+	}
+}
+
+func TestUIIgnoreControls(t *testing.T) {
+	rep := sample()
+	rep.Ignored = []scan.Finding{{ID: "coop.missing", Severity: scan.Low, Title: "No Cross-Origin-Opener-Policy"}}
+	p := Page{Serve: true, URL: "https://fixture.test/?a=1&b=it's", Probe: true, Report: rep,
+		Ignore: []string{"coop.missing", "typo.id"}, Unmatched: []string{"typo.id"}}
+
+	if got, want := p.IgnoreLink("csp.missing"), "/scan?ignore=coop.missing%2Ctypo.id%2Ccsp.missing&probe=1&regrade=1&url=https%3A%2F%2Ffixture.test%2F%3Fa%3D1%26b%3Dit%27s"; got != want {
+		t.Errorf("IgnoreLink = %s\nwant         %s", got, want)
+	}
+	if got := p.UnignoreLink("coop.missing"); !strings.HasPrefix(got, "/scan?ignore=typo.id&") {
+		t.Errorf("UnignoreLink = %s", got)
+	}
+	if got := (Page{URL: "x.test", Ignore: []string{"a.b"}}).UnignoreLink("a.b"); strings.Contains(got, "ignore") {
+		t.Errorf("removing the last ID still sends an ignore list: %s", got)
+	}
+	if len(p.Ignore) != 2 {
+		t.Error("building links changed the page's ignore list")
+	}
+	// Only IDs that matched go into the command, and the URL is shell-quoted.
+	if got, want := p.Command(), `shieldcheck scan 'https://fixture.test/?a=1&b=it'\''s' --probe --ignore coop.missing`; got != want {
+		t.Errorf("Command = %s\nwant      %s", got, want)
+	}
+
+	var ui bytes.Buffer
+	HTML(&ui, p)
+	out := ui.String()
+	for _, want := range []string{"Ignore this finding", "Grade it again", `name="ignore" value="coop.missing,typo.id"`, "<code>typo.id</code>", "--ignore coop.missing", "format=sarif&amp;ignore=coop.missing%2Ctypo.id"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("UI page lacks %q", want)
+		}
+	}
+	var file bytes.Buffer
+	HTML(&file, Page{Report: rep})
+	if strings.Contains(file.String(), "Ignore this finding") || strings.Contains(file.String(), "Grade it again") {
+		t.Error("the report file has links that need the UI")
 	}
 }
