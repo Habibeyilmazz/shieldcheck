@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-22
+
+This release ships `--ignore` (CLI, action input and web UI) and the fixes
+below; 0.1.2 did not have them.
+
+### Fixed (first-run round 9)
+
+- The README documented `--ignore` and the action's `ignore` input while the
+  latest release (0.1.2), `go install ...@latest` and the README's
+  `uses: ...@v0.1.2` all lacked them: following the README gave
+  "flag provided but not defined: -ignore", and a source build called itself
+  0.1.2 too. Released as 0.1.3 and the README points at `@v0.1.3`.
+- `shieldcheck serve` on a port that is already taken (for example by an
+  earlier `serve`) now says to pick another with `--port N`, not only
+  "address already in use".
+- `--output`: an error when closing the file (a full disk can surface only
+  there) is now reported with exit status 2 instead of being dropped.
+
+### Notes (first-run round 9)
+
+- Followed the README literally in a fresh folder: release archive
+  (checksum OK, scan of example.com OK), build from source, `serve`.
+  Whole code read again; nothing else worth changing was found.
+- Still open: SARIF suppressions, Windows console. Processes on 4110-4114
+  were not started by this round and were left alone; it used 4116.
+- Commits from this round are co-authored by Claude Opus 5.5.
+
 ### Fixed (perf-a11y round)
 
 - Web UI: the "--ignore" CLI line now includes `--allow-private` when `serve`

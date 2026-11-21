@@ -144,7 +144,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: Habibeyilmazz/shieldcheck@v0.1.2
+      - uses: Habibeyilmazz/shieldcheck@v0.1.3
         with:
           url: https://your-site.example
           min-grade: B
@@ -163,7 +163,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v5
-      - uses: Habibeyilmazz/shieldcheck@v0.1.2
+      - uses: Habibeyilmazz/shieldcheck@v0.1.3
         with:
           url: https://your-site.example
           format: sarif
