@@ -34,6 +34,9 @@ func summary(r *scan.Report) string {
 			parts = append(parts, fmt.Sprintf("%d %s", n, strings.ToLower(labels[s])))
 		}
 	}
+	if n := len(r.Ignored); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d ignored", n))
+	}
 	return strings.Join(parts, ", ")
 }
 
@@ -155,6 +158,12 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 			}
 		}
 	}
+	if len(r.Ignored) > 0 {
+		p("\n  %s\n", paint("2", fmt.Sprintf("IGNORED (%d), not graded", len(r.Ignored))))
+		for _, f := range r.Ignored {
+			p("%s  %s\n", wrap(sanitize(f.Title), indent, 66), paint("2", f.ID))
+		}
+	}
 	if o.Platform == "" && len(r.Findings) > r.Count(scan.Pass) {
 		p("\n  %s\n", paint("2", "Add --fix nginx|apache|caddy|nextjs|vercel|netlify for copy-paste config."))
 	}
@@ -218,10 +227,19 @@ func SARIF(w io.Writer, r *scan.Report) error {
 				"informationUri": "https://github.com/Habibeyilmazz/shieldcheck",
 				"rules":          rules,
 			}},
-			"results":    results,
-			"properties": obj{"grade": r.Grade, "score": r.Score, "target": r.Target},
+			"results": results,
+			// Ignored findings are left out of the results, as they are left out of the grade.
+			"properties": obj{"grade": r.Grade, "score": r.Score, "target": r.Target, "ignored": ignoredIDs(r)},
 		}},
 	})
+}
+
+func ignoredIDs(r *scan.Report) []string {
+	ids := []string{}
+	for _, f := range r.Ignored {
+		ids = append(ids, f.ID)
+	}
+	return ids
 }
 
 func first(a, b string) string {

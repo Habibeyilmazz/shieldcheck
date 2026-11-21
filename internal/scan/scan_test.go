@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -614,5 +615,36 @@ func TestErrorsArePlain(t *testing.T) {
 	}
 	if got := fetchFailure(&net.DNSError{Err: "i/o timeout", IsTimeout: true}); !strings.Contains(got, "in time") {
 		t.Errorf("timeout: %q", got)
+	}
+}
+
+func TestIgnoreLeavesFindingsOutOfTheGrade(t *testing.T) {
+	rep := &Report{}
+	finish(rep, []Finding{
+		{ID: "csp.missing", Category: "headers", Severity: High, Header: &Header{"Content-Security-Policy", "default-src 'self'"}},
+		{ID: "coop.missing", Category: "headers", Severity: Low, Header: &Header{"Cross-Origin-Opener-Policy", "same-origin"}},
+		{ID: "spf.missing", Category: "dns", Severity: Critical},
+		{ID: "hsts.ok", Category: "headers", Severity: Pass},
+	})
+	if rep.Grade != "F" || len(rep.HeaderFixes) == 0 {
+		t.Fatalf("before: grade %s, %d header fixes", rep.Grade, len(rep.HeaderFixes))
+	}
+	unmatched := Ignore(rep, []string{"spf.missing", "coop.missing", "hsts.ok", "typo.missing", "typo.missing"})
+	if !slices.Equal(unmatched, []string{"hsts.ok", "typo.missing"}) {
+		t.Errorf("unmatched = %v; a passed check cannot be ignored and each ID is named once", unmatched)
+	}
+	if rep.Score != 80 || rep.Grade != "B" || len(rep.Findings) != 2 || len(rep.Ignored) != 2 {
+		t.Errorf("after: %d %s, %d findings, %d ignored", rep.Score, rep.Grade, len(rep.Findings), len(rep.Ignored))
+	}
+	// One header left to add: no combined snippet, and none naming the ignored header.
+	if rep.HeaderFixes != nil {
+		t.Errorf("combined header fix still built: %v", rep.HeaderFixes)
+	}
+
+	all := &Report{}
+	finish(all, []Finding{{ID: "csp.missing", Severity: High}})
+	Ignore(all, []string{"csp.missing"})
+	if all.Findings == nil || all.Grade != "A" {
+		t.Errorf("everything ignored: findings %v, grade %s", all.Findings, all.Grade)
 	}
 }

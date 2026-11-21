@@ -69,6 +69,16 @@ func TestScanCommand(t *testing.T) {
 		t.Errorf("--min-grade B on a D site: code %d, stderr %q", code, errOut)
 	}
 
+	// Accepting the missing CSP (high) and framing protection (medium) lifts the D to a B.
+	// The flag takes a comma-separated list and may be repeated.
+	ignore := []string{"--ignore", "csp.missing", "--ignore", "frame.missing, nope.missing"}
+	code, out, errOut = cli(append([]string{"scan", srv.URL, "--allow-private", "--min-grade", "B", "--format", "json"}, ignore...)...)
+	rep = scan.Report{}
+	json.Unmarshal([]byte(out), &rep)
+	if code != 0 || rep.Grade != "B" || len(rep.Ignored) != 2 || !strings.Contains(errOut, "--ignore nope.missing matched no finding") {
+		t.Errorf("--ignore: code %d, grade %q, %d ignored, stderr %q", code, rep.Grade, len(rep.Ignored), errOut)
+	}
+
 	file := filepath.Join(t.TempDir(), "report.html")
 	code, out, errOut = cli("scan", srv.URL, "--allow-private", "--format", "html", "--output", file)
 	html, _ := os.ReadFile(file)

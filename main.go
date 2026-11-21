@@ -31,6 +31,7 @@ Scan flags:
   --output FILE                       write the report to FILE instead of stdout
   --min-grade A|B|C|D                 exit with status 1 if the grade is worse
   --fix PLATFORM                      print fixes for nginx, apache, caddy, nextjs, vercel or netlify
+  --ignore ID[,ID...]                 leave these findings out of the grade (repeatable)
   --probe                             also request /.git/HEAD and /.env
   --allow-private                     allow loopback, private and link-local addresses
   --timeout DURATION                  limit for the whole scan (default 45s)
@@ -107,6 +108,15 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	minGrade := fs.String("min-grade", "", "")
 	fix := fs.String("fix", "", "")
 	noColor := fs.Bool("no-color", false, "")
+	var ignore []string
+	fs.Func("ignore", "", func(v string) error {
+		for id := range strings.SplitSeq(v, ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				ignore = append(ignore, id)
+			}
+		}
+		return nil
+	})
 	var o scan.Options
 	fs.BoolVar(&o.Probe, "probe", false, "")
 	fs.BoolVar(&o.AllowPrivate, "allow-private", false, "")
@@ -140,6 +150,11 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 			return fail("%v\nUse --allow-private if you really mean to scan an internal host.", err)
 		}
 		return fail("%v", err)
+	}
+	if len(ignore) > 0 {
+		for _, id := range scan.Ignore(rep, ignore) {
+			fmt.Fprintf(stderr, "shieldcheck: --ignore %s matched no finding\n", id)
+		}
 	}
 
 	out := stdout

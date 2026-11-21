@@ -230,3 +230,38 @@ func TestHTML(t *testing.T) {
 		t.Errorf("error page does not escape its input:\n%s", out)
 	}
 }
+
+func TestIgnoredFindingsAreShownButNotGraded(t *testing.T) {
+	rep := sample()
+	rep.Ignored = []scan.Finding{{ID: "coop.missing", Category: "headers", Severity: scan.Low, Title: "No Cross-Origin-Opener-Policy"}}
+
+	var term, sarif, page bytes.Buffer
+	Terminal(&term, rep, TerminalOptions{})
+	if out := term.String(); !strings.Contains(out, "1 passed, 1 ignored") || !strings.Contains(out, "IGNORED (1)") || !strings.Contains(out, "coop.missing") {
+		t.Errorf("terminal does not list the ignored finding:\n%s", out)
+	}
+
+	SARIF(&sarif, rep)
+	var doc struct {
+		Runs []struct {
+			Results    []struct{ RuleID string }
+			Properties struct{ Ignored []string }
+		}
+	}
+	if err := json.Unmarshal(sarif.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range doc.Runs[0].Results {
+		if r.RuleID == "coop.missing" {
+			t.Error("an ignored finding is a SARIF result")
+		}
+	}
+	if got := doc.Runs[0].Properties.Ignored; len(got) != 1 || got[0] != "coop.missing" {
+		t.Errorf("SARIF run properties ignored = %v", got)
+	}
+
+	HTML(&page, Page{Report: rep})
+	if out := page.String(); !strings.Contains(out, "Ignored, not graded") || !strings.Contains(out, "<code>coop.missing</code>") || !strings.Contains(out, `<code class="fid">csp.missing</code>`) {
+		t.Error("HTML report does not show the ignored finding and the finding IDs")
+	}
+}

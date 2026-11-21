@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -88,6 +89,8 @@ type Report struct {
 	Redirects  []Hop     `json:"redirects"`
 	TLS        *TLSInfo  `json:"tls,omitempty"`
 	Findings   []Finding `json:"findings"`
+	// Ignored holds findings left out of the grade with --ignore.
+	Ignored []Finding `json:"ignored,omitempty"`
 	// HeaderFixes combines every "add this header" fix into one snippet per platform.
 	HeaderFixes []Fix `json:"headerFixes,omitempty"`
 }
@@ -283,6 +286,7 @@ func finish(rep *Report, findings []Finding) {
 	})
 	rep.Findings = findings
 	rep.Score, rep.Grade = Grade(findings)
+	rep.HeaderFixes = nil
 
 	var pairs [][2]string
 	for _, f := range findings {
@@ -293,6 +297,29 @@ func finish(rep *Report, findings []Finding) {
 	if len(pairs) > 1 {
 		rep.HeaderFixes = headersFix(pairs)
 	}
+}
+
+// Ignore moves the findings with the given IDs out of the grade and into
+// rep.Ignored, then grades again. Passed checks are never moved. It returns the
+// IDs that matched nothing, so a typo or a fixed issue can be pointed out.
+func Ignore(rep *Report, ids []string) (unmatched []string) {
+	matched := map[string]bool{}
+	keep := make([]Finding, 0, len(rep.Findings))
+	for _, f := range rep.Findings {
+		if f.Severity != Pass && slices.Contains(ids, f.ID) {
+			matched[f.ID] = true
+			rep.Ignored = append(rep.Ignored, f)
+		} else {
+			keep = append(keep, f)
+		}
+	}
+	for _, id := range ids {
+		if !matched[id] && !slices.Contains(unmatched, id) {
+			unmatched = append(unmatched, id)
+		}
+	}
+	finish(rep, keep)
+	return unmatched
 }
 
 // Grade turns findings into a 0-100 score and a letter. Any critical finding
