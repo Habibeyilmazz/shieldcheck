@@ -593,3 +593,26 @@ func TestLegacyCipherSuitesCanStillBeScanned(t *testing.T) {
 		t.Errorf("TLS 1.0/1.1 only: findings %v, want tls.legacy-protocol (high)", got)
 	}
 }
+
+func TestErrorsArePlain(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := "http://" + ln.Addr().String() + "/"
+	ln.Close()
+	_, err = Run(context.Background(), closed, Options{AllowPrivate: true})
+	if err == nil || !strings.Contains(err.Error(), "nothing is listening at that address") {
+		t.Errorf("refused connection: %v", err)
+	}
+	_, err = Run(context.Background(), "not a url ::", Options{})
+	if err == nil || strings.Contains(err.Error(), "parse") || !strings.Contains(err.Error(), "not a valid URL") {
+		t.Errorf("bad URL: %v", err)
+	}
+	if got := fetchFailure(&net.DNSError{Err: "no such host", Name: "x.invalid", IsNotFound: true}); !strings.Contains(got, "does not exist") {
+		t.Errorf("DNS failure: %q", got)
+	}
+	if got := fetchFailure(&net.DNSError{Err: "i/o timeout", IsTimeout: true}); !strings.Contains(got, "in time") {
+		t.Errorf("timeout: %q", got)
+	}
+}

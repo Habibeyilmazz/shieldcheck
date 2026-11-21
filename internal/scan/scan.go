@@ -129,6 +129,10 @@ func NormalizeURL(raw string) (u *url.URL, implied bool, err error) {
 	}
 	u, err = url.Parse(raw)
 	if err != nil {
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // drop the 'parse "url":' prefix: the user just typed it
+		}
 		return nil, false, fmt.Errorf("not a valid URL: %w", err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
@@ -192,6 +196,9 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 		var ue *url.Error
 		if errors.As(err, &ue) {
 			err = ue.Err // drop the 'Get "url":' prefix; the URL is named below
+		}
+		if why := fetchFailure(err); why != "" {
+			return nil, fmt.Errorf("could not fetch %s: %s (%w)", target, why, err)
 		}
 		return nil, fmt.Errorf("could not fetch %s: %w", target, err)
 	}
@@ -323,4 +330,22 @@ func clip(s string) string {
 		s = string(r[:200]) + "…"
 	}
 	return s
+}
+
+// fetchFailure says in plain words why the first request failed, for the
+// common cases, or "" if it does not know.
+func fetchFailure(err error) string {
+	var dns *net.DNSError
+	var ne net.Error
+	msg := err.Error()
+	switch {
+	case errors.As(err, &dns) && dns.IsNotFound:
+		return "the hostname does not exist; check the spelling"
+	case errors.As(err, &ne) && ne.Timeout():
+		return "the site did not answer in time"
+	// Windows words it "actively refused".
+	case strings.Contains(msg, "connection refused"), strings.Contains(msg, "actively refused"):
+		return "nothing is listening at that address; is the site running?"
+	}
+	return ""
 }
