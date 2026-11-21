@@ -123,3 +123,12 @@ jobs:
           url: http://127.0.0.1:4110
           allow-private: "true"
           min-grade: D
+      - name: Ignoring accepted findings lifts the grade over the gate
+        uses: ./
+        with:
+          url: http://127.0.0.1:4110
+          allow-private: "true"
+          min-grade: B
+          ignore: |
+            csp.missing
+            frame.missing

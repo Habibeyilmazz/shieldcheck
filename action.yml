@@ -19,6 +19,11 @@ inputs:
   output:
     description: File to write the report to. Empty prints it to the job log.
     default: ""
+  ignore:
+    description: >-
+      Finding IDs to leave out of the grade, separated by commas, spaces or new lines
+      (for example "coop.missing, tls.legacy-protocol"). They are still listed in the report.
+    default: ""
   probe:
     description: Set to "true" to also request /.git/HEAD and /.env.
     default: "false"
@@ -44,12 +49,15 @@ runs:
         INPUT_MIN_GRADE: ${{ inputs.min-grade }}
         INPUT_FORMAT: ${{ inputs.format }}
         INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_IGNORE: ${{ inputs.ignore }}
         INPUT_PROBE: ${{ inputs.probe }}
         INPUT_ALLOW_PRIVATE: ${{ inputs.allow-private }}
       run: |
         args=(scan --format "$INPUT_FORMAT")
         if [ -n "$INPUT_MIN_GRADE" ]; then args+=(--min-grade "$INPUT_MIN_GRADE"); fi
         if [ -n "$INPUT_OUTPUT" ]; then args+=(--output "$INPUT_OUTPUT"); fi
+        set -f # split the ignore list on commas and whitespace, without globbing
+        for id in ${INPUT_IGNORE//,/ }; do args+=(--ignore "$id"); done
         if [ "$INPUT_PROBE" = "true" ]; then args+=(--probe); fi
         if [ "$INPUT_ALLOW_PRIVATE" = "true" ]; then args+=(--allow-private); fi
         "$RUNNER_TEMP/shieldcheck" "${args[@]}" -- "$INPUT_URL"
