@@ -76,6 +76,8 @@ func TestEvaluateCSP(t *testing.T) {
 		"script-src 'self' 'unsafe-inline' 'unsafe-eval'; base-uri 'self'":              {"csp.unsafe-inline", "csp.unsafe-eval"},
 		"script-src 'unsafe-inline' 'nonce-r4nd0m'; base-uri 'self'":                    {"csp.ok"}, // the nonce makes browsers ignore unsafe-inline
 		"script-src 'unsafe-inline' https: 'strict-dynamic' 'nonce-x'; base-uri 'none'": {"csp.ok"},
+		"script-src https: 'nonce-r4nd0m'; base-uri 'none'":                             {"csp.wildcard"}, // a nonce alone does not cancel https:
+		"script-src 'unsafe-inline' 'strict-dynamic'; base-uri 'none'":                  {"csp.ok"},
 		"SCRIPT-SRC https:; base-uri 'self'":                                            {"csp.wildcard"},
 		"default-src 'self'; script-src *; base-uri 'self'":                             {"csp.wildcard"},
 		"script-src 'self'; script-src *; base-uri 'self'":                              {"csp.ok"}, // the first directive wins
@@ -128,6 +130,11 @@ func TestHeaderVariants(t *testing.T) {
 			t.Errorf("%s: want %s, got %v", tc.name, tc.want, got)
 		}
 	}
+	// frame-ancestors wins over X-Frame-Options when both are sent.
+	both := headerFindings(http.Header{"Content-Security-Policy": {"frame-ancestors *"}, "X-Frame-Options": {"DENY"}}, "")
+	if both["frame.missing"] != Medium || both["frame.ok"] != "" {
+		t.Errorf("frame-ancestors * with X-Frame-Options: DENY: %v", both)
+	}
 	if got := headerFindings(http.Header{"Server": {"nginx"}}, ""); got["disclosure.version"] != "" {
 		t.Error("a Server header without a version is not a disclosure")
 	}
@@ -147,6 +154,13 @@ func TestCookies(t *testing.T) {
 	got = check(&http.Cookie{Name: "csrftoken", Secure: true, SameSite: http.SameSiteLaxMode}, &http.Cookie{Name: "theme", SameSite: http.SameSiteLaxMode})
 	if _, bad := got["cookie.no-httponly"]; bad || got["cookie.no-secure"] != Low {
 		t.Errorf("non-session cookies: %v", got)
+	}
+	// The same name set by two hosts in a redirect chain is two cookies: the secure one does not hide the other.
+	other, _ := url.Parse("https://login.fixture.test/")
+	hops := []hop{{URL: other, Cookies: []*http.Cookie{{Name: "sid", HttpOnly: true, SameSite: http.SameSiteLaxMode}}},
+		{URL: u, Cookies: []*http.Cookie{{Name: "sid", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode}}}}
+	if got := ids(checkCookies(&page{hops: hops, final: hops[1]})); got["cookie.no-secure"] != Medium {
+		t.Errorf("cookies from two hosts: %v", got)
 	}
 	if got := check(); got["cookie.none"] != Pass {
 		t.Errorf("no cookies: %v", got)
@@ -238,6 +252,10 @@ func TestDNSChecks(t *testing.T) {
 			"example.com":        {"v=spf1 -all", "v=spf1 mx -all"},
 			"_dmarc.example.com": {"v=DMARC1; pct=100"},
 		}, map[string]Severity{"spf.multiple": Medium, "dmarc.invalid": Medium}},
+		{"two DMARC records", "example.com", map[string][]string{
+			"example.com":        {"v=spf1 -all"},
+			"_dmarc.example.com": {"v=DMARC1; p=reject", "v=DMARC1; p=none"},
+		}, map[string]Severity{"spf.ok": Pass, "dmarc.multiple": Medium}},
 		{"spf lookalike is ignored", "example.com", map[string][]string{
 			"example.com": {"v=spf10 -all", "v=spf1 mx"},
 		}, map[string]Severity{"spf.no-all": Low, "dmarc.missing": Medium}},
@@ -252,6 +270,13 @@ func TestDNSChecks(t *testing.T) {
 			if got[id] != sev {
 				t.Errorf("%s: %s = %q, want %q (all: %v)", tc.name, id, got[id], sev, got)
 			}
+		}
+	}
+
+	// SPF found on a parent domain must say so: it does not cover the subdomain.
+	for _, f := range checkDNS(context.Background(), zone(map[string][]string{"example.com": {"v=spf1 -all"}}), "app.example.com") {
+		if f.ID == "spf.ok" && !strings.Contains(f.Detail, "app.example.com has no SPF record of its own") {
+			t.Errorf("inherited SPF detail = %q", f.Detail)
 		}
 	}
 

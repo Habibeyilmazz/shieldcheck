@@ -55,10 +55,10 @@ The start of a real scan of `https://example.com`:
 | Area | Checks |
 | --- | --- |
 | Security headers | Content-Security-Policy presence and quality (`unsafe-inline`, `unsafe-eval`, wildcard script sources, missing `base-uri`, report-only, meta-tag only), HSTS (`max-age`, `includeSubDomains`), clickjacking protection (`X-Frame-Options` or `frame-ancestors`), `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, CORP, version-revealing `Server` and `X-Powered-By` headers |
-| TLS | Certificate trust chain, hostname match and expiry (warns under 30 days, more loudly under 14), which of TLS 1.0 to 1.3 the server accepts |
+| TLS | Certificate trust chain, hostname match and expiry (warns under 30 days, more loudly under 14), for the site and for every HTTPS host that redirects to it; which of TLS 1.0 to 1.3 the server accepts |
 | Cookies | `Secure`, `HttpOnly` (for cookies that look like sessions) and `SameSite`. Only names are reported, never values |
 | Transport | Plain HTTP only, HTTP that does not redirect to HTTPS, redirect chains that drop from HTTPS to HTTP, mixed content in the page HTML |
-| Email DNS | SPF (missing, duplicate, `+all`, `?all`, no `all`) and DMARC (missing, invalid, `p=none`) |
+| Email DNS | SPF (missing, duplicate, `+all`, `?all`, no `all`) and DMARC (missing, duplicate, invalid, `p=none`) |
 | Disclosure | `/.well-known/security.txt` presence and `Expires` date. With `--probe`: publicly readable `/.git/HEAD` and `/.env` |
 
 Every finding has a severity, what was observed, the risk in plain English, and a fix. Header fixes come as a snippet per platform, plus one combined snippet with all missing headers.
@@ -149,16 +149,16 @@ shieldcheck is strictly passive. One scan makes:
 
 - one GET for the page, following up to 10 redirects by hand so every hop's headers and cookies are seen
 - one GET to `http://<host>/` to see whether plain HTTP redirects (skipped when the scan started on `http://` or uses a non-standard port)
-- five TLS handshakes: one to read the certificate, then one each for TLS 1.0, 1.1, 1.2 and 1.3
+- five TLS handshakes: one to read the certificate, then one each for TLS 1.0, 1.1, 1.2 and 1.3, plus one for each other HTTPS host in the redirect chain
 - one GET for `/.well-known/security.txt`
 - TXT lookups for SPF and DMARC on the hostname and its parent domains
 - with `--probe` only: one GET each for `/.git/HEAD` and `/.env`
 
-Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Requests identify themselves with a `shieldcheck/<version>` user agent.
+Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Response headers over 64 KB and bodies past the first 1 MB are not read. Requests identify themselves with a `shieldcheck/<version>` user agent.
 
 **SSRF protection.** The web UI fetches whatever URL it is given, so the scanner refuses to connect to loopback, private, link-local, carrier-grade NAT, documentation and other non-public address ranges, in IPv4 and IPv6 (including IPv4-mapped and NAT64 forms). The check runs in the dialer, on the IP address actually being connected to, so it applies to the first request, every redirect hop, the TLS handshakes, and DNS answers that change between lookups. Environment proxies are ignored, because a proxy would hide the real destination. `--allow-private` turns the check off.
 
-**The web UI is local only.** It binds to 127.0.0.1, rejects requests whose `Host` header is not a loopback name (DNS rebinding), rejects cross-site requests using `Sec-Fetch-Site`, runs at most four scans at once and sends a strict Content-Security-Policy of its own.
+**The web UI is local only.** It binds to 127.0.0.1, rejects requests whose `Host` header is not a loopback name (DNS rebinding), rejects cross-site requests using `Sec-Fetch-Site` (and will not scan for a browser too old to send that header), runs at most four scans at once and sends a strict Content-Security-Policy of its own.
 
 **Hostile input.** Header values and page content from the scanned site are escaped in HTML and stripped of control characters in the terminal, so a site cannot inject markup or escape sequences into its own report. The contents of an exposed `.env` are never copied into a report.
 
@@ -170,7 +170,7 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 - The certificate chain is verified against the root store of the machine running the scan, without fetching missing intermediates. A server that omits its intermediate certificate is reported as untrusted, which is how most non-browser clients see it.
 - TLS checks cover protocol versions, not individual cipher suites.
 - The fix snippets were written from each platform's documentation. The header snippets for `vercel.json`, `netlify.toml` and `next.config.js` were syntax-checked; none were run against a live nginx, Apache, Caddy, Vercel or Netlify install.
-- SPF and DMARC are looked up on the hostname and then each parent domain down to two labels, without a public-suffix list. DKIM is not checked because it needs a selector name.
+- SPF and DMARC are looked up on the hostname and then each parent domain down to two labels, without a public-suffix list. An SPF record found only on a parent domain is reported with a note, since SPF is not inherited. DKIM is not checked because it needs a selector name.
 
 ## Roadmap
 

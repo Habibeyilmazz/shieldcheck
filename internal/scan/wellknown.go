@@ -26,8 +26,11 @@ func checkSecurityTxt(ctx context.Context, c *client, final *url.URL) []Finding 
 	const advice = "Use a contact address that is actually read. With Next.js, Vercel or Netlify, put the file at public/.well-known/security.txt (or the same path in your publish directory)."
 
 	hops, body, err := c.follow(ctx, u)
+	if err != nil {
+		return []Finding{f("securitytxt.unchecked", Info, "security.txt could not be checked", clip(err.Error()), "", "", nil)}
+	}
 	// Requiring a Contact line rules out "soft 404" pages that answer 200 with HTML.
-	if err != nil || hops[len(hops)-1].Status != 200 || !secContact.Match(body) {
+	if hops[len(hops)-1].Status != 200 || !secContact.Match(body) {
 		return []Finding{f("securitytxt.missing", Low, "No security.txt", "No valid file at "+u.String()+".",
 			"When someone finds a vulnerability in your site, security.txt tells them where to report it. Without it, reports get lost in support inboxes, or are not sent at all.", advice, fix)}
 	}
@@ -51,9 +54,11 @@ var (
 // checkProbes requests two well-known paths that should never be public. It
 // only runs with Options.Probe. The response bodies are never put in the report.
 func checkProbes(ctx context.Context, c *client, final *url.URL) []Finding {
+	failed := 0
 	probe := func(path string) (status int, contentType string, body []byte) {
 		resp, err := c.get(ctx, final.ResolveReference(&url.URL{Path: path}))
 		if err != nil {
+			failed++
 			return 0, "", nil
 		}
 		defer resp.Body.Close()
@@ -75,7 +80,11 @@ func checkProbes(ctx context.Context, c *client, final *url.URL) []Finding {
 			".env files usually hold database passwords, API keys and signing secrets. Bots request this path on every site they find, so assume the contents have already been copied.",
 			"Block the path and rotate every secret in the file."))
 	}
-	if len(out) == 0 {
+	switch {
+	case failed > 0:
+		out = append(out, Finding{ID: "exposed.unchecked", Category: "disclosure", Severity: Info, Title: "/.git/HEAD and /.env could not be fully checked",
+			Detail: fmt.Sprintf("%d of 2 probe requests failed.", failed)})
+	case len(out) == 0:
 		out = append(out, Finding{ID: "exposed.none", Category: "disclosure", Severity: Pass, Title: "/.git/HEAD and /.env are not exposed"})
 	}
 	return out

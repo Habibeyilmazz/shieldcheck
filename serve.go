@@ -65,14 +65,16 @@ func newServer() *server {
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The UI is for the person at this machine only. Checking Host stops DNS
 	// rebinding; checking Sec-Fetch-Site stops other websites from making the
-	// browser trigger scans.
+	// browser trigger scans. Scans need the header to be present, so a browser
+	// too old to send it cannot be used as a blind proxy either.
 	host := r.Host
 	if h, _, err := net.SplitHostPort(r.Host); err == nil {
 		host = h
 	}
 	site := r.Header.Get("Sec-Fetch-Site")
-	if (host != "127.0.0.1" && host != "localhost" && host != "::1") || (site != "" && site != "same-origin" && site != "none") {
-		http.Error(w, "forbidden: open the UI directly at its 127.0.0.1 address", http.StatusForbidden)
+	own := site == "same-origin" || site == "none"
+	if (host != "127.0.0.1" && host != "localhost") || (site != "" && !own) || (r.URL.Path == "/scan" && !own) {
+		http.Error(w, "forbidden: open the UI directly at its 127.0.0.1 address, in a browser that sends Sec-Fetch-Site", http.StatusForbidden)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

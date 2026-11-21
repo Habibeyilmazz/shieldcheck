@@ -210,7 +210,7 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 	}
 	wg.Go(func() { add(checkTransport(ctx, c, p)) })
 	wg.Go(func() {
-		info, fs := checkTLS(ctx, c, p.final.URL)
+		info, fs := checkTLS(ctx, c, p)
 		mu.Lock()
 		rep.TLS = info
 		mu.Unlock()

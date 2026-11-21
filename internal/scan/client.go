@@ -29,13 +29,14 @@ func (e *BlockedError) Error() string {
 }
 
 // Ranges that netip's Is* helpers do not cover: reserved, documentation,
-// carrier-grade NAT, and IPv6 ranges that embed an IPv4 address.
+// carrier-grade NAT, IPv6 ranges that embed an IPv4 address, the deprecated
+// IPv6 site-local range, and Azure's in-VM platform endpoint.
 var blockedPrefixes = func() []netip.Prefix {
 	var ps []netip.Prefix
 	for _, s := range []string{
 		"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24",
-		"198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
-		"::/96", "64:ff9b::/96", "64:ff9b:1::/48", "2001::/32", "2001:db8::/32", "2002::/16",
+		"198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "168.63.129.16/32",
+		"::/96", "64:ff9b::/96", "64:ff9b:1::/48", "2001::/32", "2001:db8::/32", "2002::/16", "fec0::/10",
 	} {
 		ps = append(ps, netip.MustParsePrefix(s))
 	}
@@ -91,9 +92,10 @@ func newClient(o Options) *client {
 				// Certificates are verified and reported by checkTLS; skipping
 				// verification here lets the other checks still run on a site
 				// whose certificate is broken.
-				TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-				TLSHandshakeTimeout:   8 * time.Second,
-				ResponseHeaderTimeout: 12 * time.Second,
+				TLSClientConfig:        &tls.Config{InsecureSkipVerify: true},
+				TLSHandshakeTimeout:    8 * time.Second,
+				ResponseHeaderTimeout:  12 * time.Second,
+				MaxResponseHeaderBytes: 64 << 10, // the default is 10 MB, which a hostile site could make us keep
 			},
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
@@ -136,7 +138,7 @@ func (c *client) follow(ctx context.Context, u *url.URL) ([]hop, []byte, error) 
 		}
 		resp.Body.Close()
 		next, err := u.Parse(loc)
-		if err != nil || (next.Scheme != "http" && next.Scheme != "https") || next.Hostname() == "" {
+		if err != nil || (next.Scheme != "http" && next.Scheme != "https") || next.Hostname() == "" || len(loc) > 2048 {
 			return hops, nil, fmt.Errorf("%s redirects to an unsupported location %q", u, clip(loc))
 		}
 		next.Fragment = ""

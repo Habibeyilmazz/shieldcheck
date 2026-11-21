@@ -16,15 +16,20 @@ var sessionCookie = regexp.MustCompile(`(?i)sess|sid$|auth|token|jwt|login`)
 var csrfCookie = regexp.MustCompile(`(?i)csrf|xsrf`)
 
 func checkCookies(p *page) []Finding {
-	// Later hops overwrite earlier cookies of the same name, as a browser would.
+	// A later response overwrites a cookie of the same name from the same
+	// host, as in a browser. Hosts are kept apart: their cookies coexist.
 	seen := map[string]*http.Cookie{}
-	var names []string
+	var keys, names []string
 	for _, h := range p.hops {
 		for _, c := range h.Cookies {
-			if _, ok := seen[c.Name]; !ok {
-				names = append(names, c.Name)
+			key := h.URL.Hostname() + " " + c.Name
+			if _, ok := seen[key]; !ok {
+				keys = append(keys, key)
+				if !slices.Contains(names, c.Name) {
+					names = append(names, c.Name)
+				}
 			}
-			seen[c.Name] = c
+			seen[key] = c
 		}
 	}
 	if len(names) == 0 {
@@ -48,14 +53,16 @@ func checkCookies(p *page) []Finding {
 			risk: "SameSite controls whether a cookie is sent when another site makes a request to yours. Leaving it to browser defaults means cross-site request forgery protection differs from browser to browser."},
 	}
 	flag := func(i *issue, c *http.Cookie, sev Severity) {
-		i.names = append(i.names, c.Name)
+		if !slices.Contains(i.names, c.Name) {
+			i.names = append(i.names, c.Name)
+		}
 		if i.sev == "" || (sev == Medium && i.sev == Low) {
 			i.sev = sev
 		}
 	}
-	for _, name := range names {
-		c := seen[name]
-		session := sessionCookie.MatchString(name) && !csrfCookie.MatchString(name)
+	for _, key := range keys {
+		c := seen[key]
+		session := sessionCookie.MatchString(c.Name) && !csrfCookie.MatchString(c.Name)
 		if https && !c.Secure {
 			if session {
 				flag(issues[0], c, Medium)

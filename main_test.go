@@ -102,6 +102,7 @@ func TestScanCommandErrors(t *testing.T) {
 func get(s *server, target string, edit func(*http.Request)) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("GET", target, nil)
 	req.Host = "127.0.0.1:4110"
+	req.Header.Set("Sec-Fetch-Site", "same-origin") // what a browser sends from the UI's own pages
 	if edit != nil {
 		edit(req)
 	}
@@ -167,6 +168,8 @@ func TestServeRefusesWhatItShould(t *testing.T) {
 		{"missing url", "/scan", nil, 400, "no URL given"},
 		{"DNS rebinding", "/", func(r *http.Request) { r.Host = "attacker.test:4110" }, 403, "forbidden"},
 		{"cross-site request", "/scan?url=" + srv.URL, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") }, 403, "forbidden"},
+		{"cross-site home page", "/", func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-site") }, 403, "forbidden"},
+		{"scan without fetch metadata", "/scan?url=" + srv.URL, func(r *http.Request) { r.Header.Del("Sec-Fetch-Site") }, 403, "forbidden"},
 		{"POST", "/scan", func(r *http.Request) { r.Method = "POST" }, 405, "not allowed"},
 		{"unknown path", "/admin", nil, 404, "not found"},
 	}
@@ -176,8 +179,11 @@ func TestServeRefusesWhatItShould(t *testing.T) {
 			t.Errorf("%s: status %d, want %d with %q\n%s", tc.name, rec.Code, tc.status, tc.want, rec.Body.String())
 		}
 	}
-	if ok := get(s, "/", func(r *http.Request) { r.Host = "localhost:4110"; r.Header.Set("Sec-Fetch-Site", "same-origin") }); ok.Code != 200 {
-		t.Errorf("localhost with same-origin fetch metadata: %d", ok.Code)
+	// Typing the address (Sec-Fetch-Site: none) and tools that send no fetch metadata can load the form.
+	for _, site := range []string{"none", ""} {
+		if ok := get(s, "/", func(r *http.Request) { r.Host = "localhost:4110"; r.Header.Set("Sec-Fetch-Site", site) }); ok.Code != 200 {
+			t.Errorf("home page with Sec-Fetch-Site %q: %d", site, ok.Code)
+		}
 	}
 
 	// With every slot busy a new scan is turned away instead of queued.

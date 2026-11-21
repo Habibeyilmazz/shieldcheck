@@ -46,18 +46,50 @@ func verifyChain(certs []*x509.Certificate, host string, roots *x509.CertPool) e
 	return err
 }
 
-func checkTLS(ctx context.Context, c *client, u *url.URL) (*TLSInfo, []Finding) {
+// certIssue says what is wrong with a certificate chain, in report terms.
+type certIssue struct{ id, title, detail, advice string }
+
+// judgeChain verifies the chain a server sent for host and explains a failure.
+// It returns nil when browsers would accept the certificate.
+func judgeChain(certs []*x509.Certificate, host string, roots *x509.CertPool) *certIssue {
+	leaf := certs[0]
+	expires := "Expires " + leaf.NotAfter.UTC().Format("2 Jan 2006") + "."
+	var invalid x509.CertificateInvalidError
+	var hostErr x509.HostnameError
+	var unknown x509.UnknownAuthorityError
+	switch err := verifyChain(certs, host, roots); {
+	case err == nil:
+		return nil
+	case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
+		return &certIssue{"tls.cert-expired", "Certificate has expired or is not yet valid", expires, "Renew the certificate."}
+	case errors.As(err, &hostErr):
+		return &certIssue{"tls.cert-hostname", "Certificate does not match the hostname",
+			fmt.Sprintf("The certificate is valid for %s, not for %s.", clip(strings.Join(leaf.DNSNames, ", ")), host), "Issue a certificate that lists this hostname."}
+	case errors.As(err, &unknown):
+		return &certIssue{"tls.cert-untrusted", "Certificate chain is not trusted", "The chain the server sent does not lead to a trusted root. " + expires,
+			"The usual causes are a self-signed certificate, a private CA, or a server that sends its own certificate without the intermediate certificates."}
+	default:
+		return &certIssue{"tls.cert-invalid", "Certificate is not valid", clip(err.Error()), "Replace the certificate."}
+	}
+}
+
+func hostPort(u *url.URL) string {
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	return net.JoinHostPort(u.Hostname(), port)
+}
+
+func checkTLS(ctx context.Context, c *client, p *page) (*TLSInfo, []Finding) {
+	u := p.final.URL
 	if u.Scheme != "https" {
 		return nil, nil // the missing HTTPS is reported by checkTransport
 	}
 	f := func(id string, sev Severity, title, detail, risk, advice string, fixes []Fix) Finding {
 		return Finding{ID: id, Category: "tls", Severity: sev, Title: title, Detail: detail, Risk: risk, Advice: advice, Fixes: fixes}
 	}
-	host, port := u.Hostname(), u.Port()
-	if port == "" {
-		port = "443"
-	}
-	addr := net.JoinHostPort(host, port)
+	host, addr := u.Hostname(), hostPort(u)
 
 	state, err := c.handshake(ctx, addr, host, tls.VersionTLS10, tls.VersionTLS13)
 	if err != nil || len(state.PeerCertificates) == 0 {
@@ -76,33 +108,41 @@ func checkTLS(ctx context.Context, c *client, u *url.URL) (*TLSInfo, []Finding) 
 
 	// Certificate: trust chain, hostname, validity period.
 	const certRisk = "Browsers show a full-page security warning and most visitors will leave. Anyone who clicks through has no way of knowing they are talking to your server and not an impostor."
+	const expiryRisk = "When the certificate expires, browsers block the site with a security warning until it is renewed."
 	expires := fmt.Sprintf("Issued by %s, expires %s.", info.Issuer, info.NotAfter.Format("2 Jan 2006"))
-	var invalid x509.CertificateInvalidError
-	var hostErr x509.HostnameError
-	var unknown x509.UnknownAuthorityError
-	switch err := verifyChain(state.PeerCertificates, host, c.rootCAs); {
-	case err == nil && info.DaysLeft < 14:
-		out = append(out, f("tls.cert-expiring", High, fmt.Sprintf("Certificate expires in %d days", info.DaysLeft), expires,
-			"When the certificate expires, browsers block the site with a security warning until it is renewed.",
+	switch issue := judgeChain(state.PeerCertificates, host, c.rootCAs); {
+	case issue != nil:
+		out = append(out, f(issue.id, Critical, issue.title, issue.detail, certRisk, issue.advice, certFix))
+	case info.DaysLeft < 14:
+		out = append(out, f("tls.cert-expiring", High, fmt.Sprintf("Certificate expires in %d days", info.DaysLeft), expires, expiryRisk,
 			"Renew it now and check why automatic renewal did not run.", certFix))
-	case err == nil && info.DaysLeft < 30:
-		out = append(out, f("tls.cert-expiring", Medium, fmt.Sprintf("Certificate expires in %d days", info.DaysLeft), expires,
-			"When the certificate expires, browsers block the site with a security warning until it is renewed.",
+	case info.DaysLeft < 30:
+		out = append(out, f("tls.cert-expiring", Medium, fmt.Sprintf("Certificate expires in %d days", info.DaysLeft), expires, expiryRisk,
 			"Automatic renewal normally happens 30 days before expiry, so check that it is working.", certFix))
-	case err == nil:
-		out = append(out, f("tls.cert-ok", Pass, fmt.Sprintf("Certificate is valid for %d more days", info.DaysLeft), expires, "", "", nil))
-	case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
-		out = append(out, f("tls.cert-expired", Critical, "Certificate has expired or is not yet valid", expires, certRisk, "Renew the certificate.", certFix))
-	case errors.As(err, &hostErr):
-		out = append(out, f("tls.cert-hostname", Critical, "Certificate does not match the hostname",
-			fmt.Sprintf("The certificate is valid for %s, not for %s.", clip(strings.Join(leaf.DNSNames, ", ")), host), certRisk,
-			"Issue a certificate that lists this hostname.", certFix))
-	case errors.As(err, &unknown):
-		out = append(out, f("tls.cert-untrusted", Critical, "Certificate chain is not trusted",
-			"The chain the server sent does not lead to a trusted root. "+expires, certRisk,
-			"The usual causes are a self-signed certificate, a private CA, or a server that sends its own certificate without the intermediate certificates.", certFix))
 	default:
-		out = append(out, f("tls.cert-invalid", Critical, "Certificate is not valid", clip(err.Error()), certRisk, "Replace the certificate.", certFix))
+		out = append(out, f("tls.cert-ok", Pass, fmt.Sprintf("Certificate is valid for %d more days", info.DaysLeft), expires, "", "", nil))
+	}
+
+	// A browser stops at the first bad certificate, so the HTTPS hosts that
+	// redirect to the final one need a valid certificate too.
+	var bad []string
+	checked := map[string]bool{addr: true}
+	for _, h := range p.hops {
+		if a := hostPort(h.URL); h.URL.Scheme == "https" && !checked[a] {
+			checked[a] = true
+			st, err := c.handshake(ctx, a, h.URL.Hostname(), tls.VersionTLS10, tls.VersionTLS13)
+			if err != nil || len(st.PeerCertificates) == 0 {
+				continue
+			}
+			if issue := judgeChain(st.PeerCertificates, h.URL.Hostname(), c.rootCAs); issue != nil {
+				bad = append(bad, h.URL.Hostname()+": "+issue.title+". "+issue.detail)
+			}
+		}
+	}
+	if len(bad) > 0 {
+		out = append(out, f("tls.redirect-cert", Critical, "A host that redirects to the site has an invalid certificate", strings.Join(bad, " "),
+			"The redirect never happens: the browser stops at the security warning for the first address and the visitor does not reach the working one.",
+			"Give every hostname that redirects to the site a valid certificate of its own.", certFix))
 	}
 
 	// Protocol versions: one ordinary handshake per version.

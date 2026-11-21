@@ -300,7 +300,7 @@ func TestIsPublic(t *testing.T) {
 		"127.0.0.1", "127.8.8.8", "10.0.0.1", "172.16.5.4", "192.168.1.1", "169.254.169.254", "0.0.0.0", "0.1.2.3",
 		"100.64.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1", "198.51.100.7", "203.0.113.9", "224.0.0.1", "240.0.0.1", "255.255.255.255",
 		"::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "::10.0.0.1",
-		"64:ff9b::7f00:1", "2001:db8::1", "2002:7f00:1::1", "2001::1",
+		"64:ff9b::7f00:1", "2001:db8::1", "2002:7f00:1::1", "2001::1", "fec0::1", "168.63.129.16", "fe80::1%eth0",
 	}
 	for _, s := range private {
 		if isPublic(netip.MustParseAddr(s)) {
@@ -341,5 +341,51 @@ func TestPrivateTargetsAreBlocked(t *testing.T) {
 	c := newClient(Options{})
 	if _, err := c.handshake(context.Background(), srv.Listener.Addr().String(), "127.0.0.1", tls.VersionTLS12, tls.VersionTLS13); err == nil {
 		t.Error("TLS handshake to a private address was not blocked")
+	}
+}
+
+func TestRedirectingHostNeedsAValidCertificateToo(t *testing.T) {
+	final := tlsServer(t, goodSite(), nil)
+	cert, _ := selfSigned(t, time.Now().AddDate(1, 0, 0), "") // not in the trusted pool
+	first := tlsServer(t, http.RedirectHandler(final.URL+"/", http.StatusMovedPermanently), &tls.Config{Certificates: []tls.Certificate{cert}})
+	rep := run(t, first.URL, Options{RootCAs: trust(final)})
+	got := ids(rep.Findings)
+	if got["tls.redirect-cert"] != Critical || got["tls.cert-ok"] != Pass || rep.Grade != "F" {
+		t.Errorf("grade %s, findings %v", rep.Grade, got)
+	}
+}
+
+func TestFailedRequestsAreNotReportedAsClean(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			panic(http.ErrAbortHandler) // drop the connection
+		}
+	}))
+	defer srv.Close()
+	got := ids(run(t, srv.URL, Options{Probe: true}).Findings)
+	if got["exposed.unchecked"] != Info || got["securitytxt.unchecked"] != Info {
+		t.Errorf("want unchecked findings, got %v", got)
+	}
+	for _, id := range []string{"exposed.none", "securitytxt.missing"} {
+		if _, ok := got[id]; ok {
+			t.Errorf("%s reported although the request failed", id)
+		}
+	}
+}
+
+func TestOversizedResponsesAreRefused(t *testing.T) {
+	huge := strings.Repeat("a", 100<<10)
+	header := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("X-Padding", huge) }))
+	defer header.Close()
+	if _, err := Run(context.Background(), header.URL, Options{AllowPrivate: true}); err == nil {
+		t.Error("a 100 KB response header was accepted")
+	}
+	location := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "/"+huge[:3000])
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer location.Close()
+	if _, err := Run(context.Background(), location.URL, Options{AllowPrivate: true}); err == nil || len(err.Error()) > 600 {
+		t.Errorf("overlong redirect: err = %.80v", err)
 	}
 }

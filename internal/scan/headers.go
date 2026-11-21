@@ -115,17 +115,18 @@ func checkHeaders(p *page) []Finding {
 	if len(policies) > 0 {
 		fa, hasFA = policy["frame-ancestors"]
 	}
+	// Browsers that understand frame-ancestors ignore X-Frame-Options when both are sent.
 	switch {
 	case hasFA && !has(fa, "*", "http:", "https:"):
 		out = append(out, f("frame.ok", Pass, "Framing is restricted", "CSP frame-ancestors "+clip(strings.Join(fa, " ")), "", ""))
-	case xfo == "DENY" || xfo == "SAMEORIGIN":
+	case !hasFA && (xfo == "DENY" || xfo == "SAMEORIGIN"):
 		out = append(out, f("frame.ok", Pass, "Framing is restricted", "X-Frame-Options: "+xfo, "", ""))
 	default:
 		detail := "Neither X-Frame-Options nor a CSP frame-ancestors directive is sent."
-		if xfo != "" {
+		if hasFA {
+			detail = "CSP frame-ancestors allows any site (" + clip(strings.Join(fa, " ")) + "), and it overrides X-Frame-Options."
+		} else if xfo != "" {
 			detail = "X-Frame-Options: " + clip(xfo) + " is not a value browsers honour."
-		} else if hasFA {
-			detail = "CSP frame-ancestors allows any site: " + clip(strings.Join(fa, " "))
 		}
 		out = append(out, withHeader(f("frame.missing", Medium, "Page can be embedded in other sites (clickjacking)", detail,
 			"Another site can load your page in an invisible frame and trick users into clicking buttons on it, such as confirming a payment or changing a setting, while they think they are clicking something else.",
@@ -219,18 +220,20 @@ func evaluateCSP(p csp, raw string) []Finding {
 	if !ok {
 		script, ok = p["default-src"]
 	}
-	// A nonce, hash or 'strict-dynamic' makes browsers ignore 'unsafe-inline' and host allowlists.
-	strict := has(script, "'nonce-", "'sha256-", "'sha384-", "'sha512-", "'strict-dynamic'")
+	// Browsers ignore 'unsafe-inline' when a nonce or hash is present, but they
+	// only ignore host and scheme sources under 'strict-dynamic'.
+	dynamic := has(script, "'strict-dynamic'")
+	nonced := has(script, "'nonce-", "'sha256-", "'sha384-", "'sha512-")
 	switch {
 	case !ok:
 		add("csp.no-script-restriction", Medium, "Content Security Policy does not restrict scripts",
 			"The policy has neither script-src nor default-src, so scripts can still be loaded from anywhere and injected inline. That is the main thing a CSP exists to stop.",
 			"Add default-src 'self' and a script-src that lists what you actually load.")
-	case has(script, "'unsafe-inline'") && !strict:
+	case has(script, "'unsafe-inline'") && !nonced && !dynamic:
 		add("csp.unsafe-inline", Medium, "Content Security Policy allows inline scripts ('unsafe-inline')",
 			"With 'unsafe-inline' the browser runs any <script> block or onclick attribute found in the page, including ones an attacker injected. The policy then gives almost no protection against cross-site scripting.",
 			"Move inline scripts into files, or keep them and allow each one with a per-response nonce or a hash.")
-	case has(script, "*", "http:", "https:", "data:") && !strict:
+	case has(script, "*", "http:", "https:", "data:") && !dynamic:
 		add("csp.wildcard", Medium, "Content Security Policy allows scripts from any host",
 			"A script source of *, https:, http: or data: lets a page load scripts from anywhere, so an attacker who can inject a script tag can point it at their own server.",
 			"List the specific hosts you load scripts from, or switch to nonces with 'strict-dynamic'.")

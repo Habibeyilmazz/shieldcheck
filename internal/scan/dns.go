@@ -85,7 +85,11 @@ func checkDNS(ctx context.Context, lookup lookupTXT, host string) []Finding {
 		out = append(out, f("spf.multiple", Medium, "More than one SPF record", fmt.Sprintf("%s has %d v=spf1 records.", d, len(recs)),
 			"Receiving servers treat several SPF records as an error and ignore all of them, which is the same as having none.", "Merge them into a single record.", spfFix))
 	default:
-		out = append(out, evaluateSPF(d, recs[0], f, spfFix))
+		spf := evaluateSPF(d, recs[0], f, spfFix)
+		if d != domains[0] {
+			spf.Detail += fmt.Sprintf(" (%s has no SPF record of its own. SPF is not inherited, so this is the parent domain's record; a DMARC policy is what protects subdomains.)", domains[0])
+		}
+		out = append(out, spf)
 	}
 
 	// DMARC
@@ -97,6 +101,9 @@ func checkDNS(ctx context.Context, lookup lookupTXT, host string) []Finding {
 		out = append(out, f("dmarc.missing", Medium, "No DMARC record", "No TXT record at _dmarc."+apex+".",
 			"DMARC tells receiving mail servers what to do with mail that fails SPF and DKIM checks. Without it, they usually deliver it. "+spoofRisk,
 			"Start with p=none and a rua address to collect reports, then move to quarantine or reject.", dmarcFix))
+	case len(recs) > 1:
+		out = append(out, f("dmarc.multiple", Medium, "More than one DMARC record", fmt.Sprintf("_dmarc.%s has %d v=DMARC1 records.", d, len(recs)),
+			"Receiving servers ignore DMARC altogether when a domain publishes more than one record. "+spoofRisk, "Keep a single record.", dmarcFix))
 	default:
 		policy := dmarcTag(recs[0], "p")
 		if sp := dmarcTag(recs[0], "sp"); sp != "" && d != domains[0] {
