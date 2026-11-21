@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"slices"
@@ -99,6 +100,14 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 	const plainRisk = "Everything sent over plain HTTP, including passwords, cookies and page content, can be read and changed by anyone between the visitor and your server: other people on the Wi-Fi, the network operator, a compromised router."
 	var out []Finding
 	if p.final.URL.Scheme != "https" {
+		if isLoopbackHost(p.final.URL.Hostname()) {
+			// A dev server on this machine is plain HTTP by design, and browsers
+			// treat it as a secure context. Grading it as "no HTTPS" would make
+			// every local scan an F whatever else is fixed.
+			return []Finding{f("https.local", Info, "HTTPS is not graded on a local address",
+				"The final URL is "+p.final.URL.String()+", which only this machine can reach.", "",
+				"Scan the deployed site as well: HTTPS, the certificate, TLS versions, HSTS and the Secure cookie flag can only be checked there.", nil)}
+		}
 		return []Finding{f("https.missing", Critical, "Site is served over plain HTTP",
 			"The final URL is "+p.final.URL.String()+".", plainRisk,
 			"Get a certificate (Let's Encrypt is free), serve the site over HTTPS, then redirect HTTP to it.", httpsRedirectFix)}
@@ -140,6 +149,16 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		}
 	}
 	return append(out, httpRedirectFinding(chain))
+}
+
+// isLoopbackHost reports whether host names this machine: localhost, a
+// .localhost name or a loopback IP address.
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if a, err := netip.ParseAddr(host); err == nil {
+		return a.Unmap().IsLoopback()
+	}
+	return host == "localhost" || strings.HasSuffix(host, ".localhost")
 }
 
 // followPlain GETs u and follows redirects for as long as they stay on

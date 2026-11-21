@@ -173,7 +173,7 @@ func TestBadPlainHTTPSite(t *testing.T) {
 		t.Errorf("grade %s, want F", rep.Grade)
 	}
 	got := ids(rep.Findings)
-	wantIDs(t, got, "https.missing", "csp.missing", "frame.missing", "xcto.missing", "referrer.missing", "permissions.missing",
+	wantIDs(t, got, "https.local", "csp.missing", "frame.missing", "xcto.missing", "referrer.missing", "permissions.missing",
 		"coop.missing", "cookie.no-httponly", "cookie.no-samesite", "disclosure.version", "securitytxt.missing", "exposed.git", "exposed.env")
 	for _, id := range []string{"hsts.missing", "cookie.no-secure", "mixed.active"} {
 		if _, ok := got[id]; ok {
@@ -193,6 +193,31 @@ func TestBadPlainHTTPSite(t *testing.T) {
 		if f.Severity != Pass && f.Severity != Info && len(f.Fixes) == 0 {
 			t.Errorf("%s has no fix", f.ID)
 		}
+	}
+}
+
+func TestPlainHTTPIsCriticalExceptOnLoopback(t *testing.T) {
+	transport := func(raw string) Finding {
+		u, _ := url.Parse(raw)
+		h := hop{URL: u, Status: 200, Header: http.Header{}}
+		return checkTransport(context.Background(), nil, &page{hops: []hop{h}, final: h})[0]
+	}
+	for _, raw := range []string{"http://fixture.test/", "http://192.168.1.20/", "http://localhost.fixture.test/"} {
+		if f := transport(raw); f.ID != "https.missing" || f.Severity != Critical {
+			t.Errorf("%s: got %s (%s), want https.missing (critical)", raw, f.ID, f.Severity)
+		}
+	}
+	for _, raw := range []string{"http://localhost:3000/", "http://app.localhost/", "http://127.0.0.1:8080/", "http://[::1]:8080/", "http://LOCALHOST./"} {
+		if f := transport(raw); f.ID != "https.local" || f.Severity != Info {
+			t.Errorf("%s: got %s (%s), want https.local (info)", raw, f.ID, f.Severity)
+		}
+	}
+
+	// So a dev server that sends the right headers can pass a grade gate.
+	srv := httptest.NewServer(goodSite())
+	defer srv.Close()
+	if rep := run(t, srv.URL, Options{}); rep.Grade != "A" {
+		t.Errorf("local plain-HTTP site with every header: grade %s (%d), findings %v", rep.Grade, rep.Score, ids(rep.Findings))
 	}
 }
 

@@ -61,3 +61,9 @@ jobs:
           min-grade: B
       - name: The grade gate failed the step
         run: test "${{ steps.gate.outcome }}" = "failure"
+      - name: A grade gate the fixture meets passes
+        uses: ./
+        with:
+          url: http://127.0.0.1:4110
+          allow-private: "true"
+          min-grade: D

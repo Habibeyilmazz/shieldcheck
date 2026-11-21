@@ -17,7 +17,8 @@ import (
 	"github.com/Habibeyilmazz/shieldcheck/internal/scan"
 )
 
-// fixture is a plain-HTTP site with no security headers: always an F.
+// fixture is a local plain-HTTP site with no security headers: a D, because
+// plain HTTP is not held against a loopback address.
 func fixture(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,24 +55,24 @@ func TestScanCommand(t *testing.T) {
 
 	code, out, _ := cli("scan", srv.URL, "--allow-private", "--format", "json")
 	var rep scan.Report
-	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || rep.Grade != "F" {
+	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || rep.Grade != "D" {
 		t.Fatalf("json scan: code %d, err %v, grade %q", code, err, rep.Grade)
 	}
 
 	code, out, _ = cli(srv.URL, "--allow-private", "--fix", "netlify") // "scan" is optional
-	if code != 0 || !strings.Contains(out, "Grade F") || !strings.Contains(out, "[[headers]]") || strings.Contains(out, "\x1b[") {
+	if code != 0 || !strings.Contains(out, "Grade D") || !strings.Contains(out, "[[headers]]") || strings.Contains(out, "\x1b[") {
 		t.Errorf("terminal scan: code %d\n%s", code, out)
 	}
 
 	code, _, errOut := cli("scan", srv.URL, "--allow-private", "--min-grade", "b", "--format", "sarif")
 	if code != 1 || !strings.Contains(errOut, "below the required B") {
-		t.Errorf("--min-grade B on an F site: code %d, stderr %q", code, errOut)
+		t.Errorf("--min-grade B on a D site: code %d, stderr %q", code, errOut)
 	}
 
 	file := filepath.Join(t.TempDir(), "report.html")
 	code, out, errOut = cli("scan", srv.URL, "--allow-private", "--format", "html", "--output", file)
 	html, _ := os.ReadFile(file)
-	if code != 0 || out != "" || !strings.Contains(string(html), `aria-label="Grade F"`) || !strings.Contains(errOut, "report written to") {
+	if code != 0 || out != "" || !strings.Contains(string(html), `aria-label="Grade D"`) || !strings.Contains(errOut, "report written to") {
 		t.Errorf("--output: code %d, stdout %q, stderr %q, file %d bytes", code, out, errOut, len(html))
 	}
 }
@@ -131,13 +132,13 @@ func TestServeUI(t *testing.T) {
 	}
 
 	page := get(s, query, nil)
-	if page.Code != 200 || !strings.Contains(page.Body.String(), `aria-label="Grade F"`) || !strings.Contains(page.Body.String(), "format=sarif") {
+	if page.Code != 200 || !strings.Contains(page.Body.String(), `aria-label="Grade D"`) || !strings.Contains(page.Body.String(), "format=sarif") {
 		t.Errorf("scan page: %d\n%s", page.Code, page.Body.String())
 	}
 
 	dl := get(s, query+"&format=json", nil)
 	var rep scan.Report
-	if err := json.Unmarshal(dl.Body.Bytes(), &rep); err != nil || rep.Grade != "F" || !strings.Contains(dl.Header().Get("Content-Disposition"), `filename="shieldcheck-127.0.0.1.json"`) {
+	if err := json.Unmarshal(dl.Body.Bytes(), &rep); err != nil || rep.Grade != "D" || !strings.Contains(dl.Header().Get("Content-Disposition"), `filename="shieldcheck-127.0.0.1.json"`) {
 		t.Errorf("json download: %v, %q", err, dl.Header().Get("Content-Disposition"))
 	}
 	if rep.ScannedAt.IsZero() || len(s.cache) != 1 {

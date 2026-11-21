@@ -125,7 +125,7 @@ jobs:
           min-grade: B
 ```
 
-Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`.
+Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
 
 ## Grading
 
@@ -141,6 +141,8 @@ The score starts at 100. Each finding costs points by severity: critical 40, hig
 
 Critical findings are: no HTTPS, a certificate browsers will reject, and an exposed `.git` or `.env`.
 
+Plain HTTP is not held against `localhost`, `*.localhost` or a loopback IP address: a dev server on your own machine is reported as "HTTPS is not graded on a local address" (info) and graded on its headers, cookies and content. HSTS, TLS and the `Secure` cookie flag can only be checked on the deployed site.
+
 A good grade means the basics are in place. It does not mean the site is secure: shieldcheck does not look for vulnerabilities in your application.
 
 ## How it works
@@ -148,7 +150,7 @@ A good grade means the basics are in place. It does not mean the site is secure:
 shieldcheck is strictly passive. One scan makes:
 
 - one GET for the page, following up to 10 redirects by hand so every hop's headers and cookies are seen
-- one GET to `http://<host>/` to see whether plain HTTP redirects (skipped when the scan started on `http://` or uses a non-standard port)
+- one GET to `http://<host>/` to see whether plain HTTP redirects to HTTPS, plus one per redirect that stays on `http://` (skipped when the scan started on `http://` or uses a non-standard port)
 - five TLS handshakes: one to read the certificate, then one each for TLS 1.0, 1.1, 1.2 and 1.3, plus one for each other HTTPS host in the redirect chain
 - one GET for `/.well-known/security.txt`
 - TXT lookups for SPF and DMARC on the hostname and its parent domains
