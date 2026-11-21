@@ -189,7 +189,7 @@ func SARIF(w io.Writer, r *scan.Report) error {
 			"ruleId":    f.ID,
 			"ruleIndex": len(rules) - 1,
 			"level":     level[f.Severity],
-			"message":   obj{"text": strings.TrimSpace(f.Title+". "+f.Detail) + " Scanned URL: " + r.FinalURL},
+			"message":   obj{"text": strings.TrimSpace(f.Title+". "+f.Detail) + " (" + r.FinalURL + ")"},
 			"locations": []obj{{"physicalLocation": obj{"artifactLocation": obj{"uri": location}}}},
 		})
 	}

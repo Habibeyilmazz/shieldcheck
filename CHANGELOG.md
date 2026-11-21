@@ -24,6 +24,12 @@ literally, and every reported gap checked by running it.
   critical finding, so a dev server is graded on its headers and a
   `--min-grade` gate on a server started inside a CI job can pass. Any other
   plain-HTTP host is still critical.
+- A server that only offers RSA key exchange, or only TLS 1.0 and 1.1, could
+  not be scanned at all ("tls: handshake failure"). The scanner now offers
+  every TLS version and cipher suite Go implements.
+- A `Server` header such as `AmazonS3` was reported as revealing a version
+  because it contains a digit. Only something that looks like a version
+  number (`1.24`) counts now.
 - `shieldcheck scan --help` and `serve --help` exit 0 instead of 2.
 - A target without a scheme but with a URL in its query
   (`site.example/?next=http://...`) was rejected as an unsupported scheme.

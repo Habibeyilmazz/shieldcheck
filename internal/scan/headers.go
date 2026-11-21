@@ -39,6 +39,10 @@ func has(sources []string, want ...string) bool {
 	return false
 }
 
+// versionNumber is what a version looks like in a Server header: "1.24" in
+// "nginx/1.24.0", but not the digit in a product name such as "AmazonS3".
+var versionNumber = regexp.MustCompile(`\d+\.\d+`)
+
 var metaCSP = regexp.MustCompile(`(?is)<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>`)
 var metaContent = regexp.MustCompile(`(?is)\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 
@@ -190,7 +194,7 @@ func checkHeaders(p *page) []Finding {
 
 	// Version disclosure
 	var leaks []string
-	if v := h.Get("Server"); strings.ContainsAny(v, "0123456789") {
+	if v := h.Get("Server"); versionNumber.MatchString(v) {
 		leaks = append(leaks, "Server: "+clip(v))
 	}
 	for _, name := range []string{"X-Powered-By", "X-AspNet-Version", "X-AspNetMvc-Version"} {

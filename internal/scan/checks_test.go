@@ -137,8 +137,16 @@ func TestHeaderVariants(t *testing.T) {
 	if both["frame.missing"] != Medium || both["frame.ok"] != "" {
 		t.Errorf("frame-ancestors * with X-Frame-Options: DENY: %v", both)
 	}
-	if got := headerFindings(http.Header{"Server": {"nginx"}}, ""); got["disclosure.version"] != "" {
-		t.Error("a Server header without a version is not a disclosure")
+	// A product name with a digit in it is not a version number.
+	for _, server := range []string{"nginx", "AmazonS3", "ECS (dcb/7F84)", "HTTP3-edge"} {
+		if got := headerFindings(http.Header{"Server": {server}}, ""); got["disclosure.version"] != "" {
+			t.Errorf("Server: %s was reported as a version disclosure", server)
+		}
+	}
+	for _, server := range []string{"Apache/2.4.58 (Ubuntu)", "Microsoft-IIS/10.0", "Jetty(9.4.51)"} {
+		if got := headerFindings(http.Header{"Server": {server}}, ""); got["disclosure.version"] != Low {
+			t.Errorf("Server: %s was not reported as a version disclosure", server)
+		}
 	}
 }
 
