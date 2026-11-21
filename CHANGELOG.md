@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (feature round 2)
+
+- Web UI ignore list, the same as `--ignore`: "Ignore this finding" on each
+  finding and "Grade it again" on each ignored one regrade the report on
+  screen from the cached scan (`/scan?...&ignore=a,b&regrade=1`), without
+  hitting the site again. The ignored list ends with the matching
+  `shieldcheck scan URL --ignore ...` line to copy into CI, and the HTML,
+  JSON and SARIF downloads carry the ignore list. IDs that matched nothing
+  are named with a "remove" link. The `ignore` parameter is validated
+  (finding-ID characters only, at most 50) and the cached report is never
+  changed by it.
+- Rescanning from the form keeps the ignore list; changing the URL drops it
+  (a small script; without JavaScript the list is kept and shown).
+
+### Notes for whoever works on this next (feature round 2)
+
+- Checked in Chromium against a local fixture: ignore two findings (F to C,
+  about 100 ms, no rescan), the copy button copies the command, rescanning
+  keeps the list, another URL drops it, "Grade it again" restores the grade.
+- The CLI line does not add `--allow-private`, even when the UI runs with it;
+  the CLI then says to add it.
+- Still open: SARIF suppressions (not verified how GitHub shows them),
+  Windows console. This round did not start the processes on 4110-4114 and
+  left them alone. Commits are co-authored by Claude Opus 5.5.
+
 ### Added (launch round)
 
 - README: "Compared with other tools" (SSL Labs, testssl.sh, securityheaders.com,
