@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed (reliability round 13)
+
+- A scan cut short by `--timeout` or Ctrl-C after the first response used to
+  print a graded report in which the unfinished checks were "could not be
+  checked" (no penalty), so the grade was better than a full scan's and could
+  pass `--min-grade` with exit 0. It now fails with exit 2.
+- Cookies: a `Set-Cookie` that expires a cookie (`Max-Age=0`, past `Expires`)
+  is a deletion, not a cookie missing Secure/HttpOnly/SameSite.
+- HSTS: a `max-age` too large for an integer was reported as "HSTS is switched
+  off"; it is now treated as a very long max-age.
+- security.txt: an `Expires` that is not an RFC 3339 timestamp (for example a
+  bare date) is reported as unreadable, not as "expired"; the expiry paths now
+  have tests.
+- DNS: hosts with five or more labels (`a.b.c.d.example.com`) looked up SPF and
+  DMARC only up to `d.example.com`, never reaching the registrable domain, so
+  they could report "No DMARC record" wrongly. The walk keeps the host, then
+  its last three parents.
+- Terminal report: lines wrap by characters, not bytes, so accented and CJK
+  text is not broken early.
+
+### Notes (reliability round 13)
+
+- Tried and found sound: odd URLs (IPv6, userinfo, IDN, port 0, control
+  characters), hostile fixture servers (lying Content-Length, invalid UTF-8
+  headers, 3000 cookies, redirect loop, empty and non-HTTP replies, markup in
+  header values in HTML/Markdown/SARIF output), concurrent `serve` requests
+  under the race detector, a real browser (Playwright) form submit, ignore and
+  JSON download against `serve`.
+- Still open: SARIF suppressions, Windows console colour, `go.mod` at `go 1.25`
+  (not a bug), the job summary has not been seen rendered on GitHub.
+- Commits from this round are co-authored by Claude Fable 5.2.
+
 ## [0.1.4] - 2026-11-22
 
 This release adds the Markdown report and the action's job summary and
