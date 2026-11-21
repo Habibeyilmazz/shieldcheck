@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -202,6 +203,14 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 	findings := checkHeaders(p)
 	findings = append(findings, checkCookies(p)...)
 	findings = append(findings, checkContent(p)...)
+	if s := p.final.Status; s >= 400 {
+		// Not a fault of its own, but the reader must know the grade is not
+		// about the page they asked for.
+		findings = append(findings, Finding{ID: "page.error-status", Category: "content", Severity: Info,
+			Title:  fmt.Sprintf("The page answered %d, so an error page was graded", s),
+			Detail: fmt.Sprintf("%s answers %d %s.", p.final.URL, s, http.StatusText(s)),
+			Advice: "Error pages often send different headers and cookies than working pages. Check the URL, and if the site blocks automated requests (401, 403, 429), scan from a network or address it allows."})
+	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup

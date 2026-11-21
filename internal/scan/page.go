@@ -118,6 +118,7 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 				p.hops[i-1].URL.String()+" redirects to "+p.hops[i].URL.String(),
 				"One unencrypted hop is enough for a network attacker to read the request, including its cookies, and to send the visitor somewhere else entirely.",
 				"Change the redirect target to an https:// URL.", nil))
+			break // one finding per report: IDs are unique in the HTML and SARIF output
 		}
 	}
 	if len(p.hops) > 4 {

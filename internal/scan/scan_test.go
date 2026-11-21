@@ -329,6 +329,51 @@ func TestDowngradeRedirect(t *testing.T) {
 	wantIDs(t, ids(rep.Findings), "redirect.downgrade")
 }
 
+func TestErrorPageIsSaidToBeAnErrorPage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/members" {
+			http.Error(w, "go away", http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+	blocked := run(t, srv.URL+"/members", Options{})
+	if _, ok := ids(blocked.Findings)["page.error-status"]; !ok || !strings.Contains(fmt.Sprint(blocked.Findings), "answers 403 Forbidden") {
+		t.Errorf("a 403 page was graded without saying so: %v", ids(blocked.Findings))
+	}
+	if _, ok := ids(run(t, srv.URL, Options{}).Findings)["page.error-status"]; ok {
+		t.Error("a 200 page was reported as an error page")
+	}
+}
+
+func TestFindingIDsAreUnique(t *testing.T) {
+	// https to http twice: each ID is an HTML anchor and a SARIF rule, so the
+	// second downgrade must not add a second finding with the same ID.
+	var plain, secure *httptest.Server
+	plain = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, secure.URL+map[string]string{"/1": "/2", "/3": "/end"}[r.URL.Path], http.StatusFound)
+	}))
+	defer plain.Close()
+	secure = tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if next := map[string]string{"/": "/1", "/2": "/3"}[r.URL.Path]; next != "" {
+			http.Redirect(w, r, plain.URL+next, http.StatusFound)
+		}
+	}), nil)
+	rep := run(t, secure.URL, Options{RootCAs: trust(secure)})
+	if len(rep.Redirects) != 5 {
+		t.Fatalf("redirects = %v, want 5 hops", rep.Redirects)
+	}
+	seen := map[string]bool{}
+	for _, f := range rep.Findings {
+		if seen[f.ID] {
+			t.Errorf("finding %s is reported twice", f.ID)
+		}
+		seen[f.ID] = true
+	}
+	if !seen["redirect.downgrade"] {
+		t.Errorf("no downgrade finding: %v", ids(rep.Findings))
+	}
+}
+
 func TestRedirectToOtherSchemeIsRefused(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "file:///etc/passwd")
