@@ -33,6 +33,24 @@ jobs:
             GOOS=$os GOARCH=amd64 go build -o /dev/null .
           done
 
+  other-systems:
+    # The release ships macOS and Windows binaries, so the tests run there too.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: go test ./...
+      - name: The built binary runs
+        shell: bash
+        run: go build -o shieldcheck.exe . && ./shieldcheck.exe version
+
   live-fixes:
     # Pastes the generated fixes into real nginx, Apache and Caddy and scans again.
     runs-on: ubuntu-latest

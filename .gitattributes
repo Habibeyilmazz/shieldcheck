@@ -1,0 +1,2 @@
+# LF everywhere, so the embedded HTML template and gofmt agree on every system
+* text=auto eol=lf
