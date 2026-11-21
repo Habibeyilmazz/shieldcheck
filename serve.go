@@ -36,7 +36,8 @@ func cmdServe(args []string, stderr io.Writer) int {
 	// Loopback only, by design: the UI fetches whatever URL it is given.
 	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(*port)))
 	if err != nil {
-		fmt.Fprintf(stderr, "shieldcheck: %v\n", err)
+		// Almost always another program on the port, often an earlier serve.
+		fmt.Fprintf(stderr, "shieldcheck: %v\nIs shieldcheck serve already running? Pick another port with --port N.\n", err)
 		return 2
 	}
 	fmt.Fprintf(stderr, "shieldcheck UI on http://%s (Ctrl+C to stop)\n", ln.Addr())

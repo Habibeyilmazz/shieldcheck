@@ -163,7 +163,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return fail("%v", err)
 		}
-		defer file.Close()
+		defer file.Close() // a no-op after the checked Close below
 		out = file
 	}
 	switch *format {
@@ -178,6 +178,9 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 		// codes after SetConsoleMode; add that call if colour is wanted there.
 		color := !*noColor && *output == "" && os.Getenv("NO_COLOR") == "" && runtime.GOOS != "windows" && isTerminal(stdout)
 		err = report.Terminal(out, rep, report.TerminalOptions{Color: color, Platform: *fix})
+	}
+	if f, ok := out.(*os.File); ok && *output != "" && err == nil {
+		err = f.Close() // a full disk can surface only here
 	}
 	if err != nil {
 		return fail("writing report: %v", err)

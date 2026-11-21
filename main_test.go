@@ -111,6 +111,10 @@ func TestScanCommandErrors(t *testing.T) {
 			t.Errorf("%v: code %d, want 0 and the usage text", args, code)
 		}
 	}
+	busy := fixture(t) // a port that is already taken
+	if code, _, errOut := cli("serve", "--port", busy.URL[strings.LastIndex(busy.URL, ":")+1:]); code != 2 || !strings.Contains(errOut, "--port N") {
+		t.Errorf("serve on a busy port: code %d, stderr %q", code, errOut)
+	}
 	if code, out, _ := cli("version"); code != 0 || !strings.Contains(out, scan.Version) {
 		t.Errorf("version: %d %q", code, out)
 	}
