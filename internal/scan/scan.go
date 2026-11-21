@@ -49,8 +49,13 @@ type Finding struct {
 	Risk     string   `json:"risk,omitempty"`   // why it matters, in plain English
 	Advice   string   `json:"advice,omitempty"` // how to fix it, in a sentence
 	Fixes    []Fix    `json:"fixes,omitempty"`
+	// Header is set when the fix is "send this response header".
+	Header *Header `json:"header,omitempty"`
+}
 
-	header [2]string // name/value when the fix is "send this response header"
+type Header struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type Hop struct {
@@ -246,8 +251,8 @@ func finish(rep *Report, findings []Finding) {
 
 	var pairs [][2]string
 	for _, f := range findings {
-		if f.header[0] != "" {
-			pairs = append(pairs, f.header)
+		if f.Header != nil {
+			pairs = append(pairs, [2]string{f.Header.Name, f.Header.Value})
 		}
 	}
 	if len(pairs) > 1 {
@@ -285,9 +290,9 @@ func GradeBelow(got, min string) bool {
 
 // clip keeps observed, attacker-controlled strings short and on one line.
 func clip(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > 200 {
-		s = s[:200] + "…"
+	s = strings.Join(strings.Fields(strings.ToValidUTF8(s, "?")), " ")
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:200]) + "…"
 	}
 	return s
 }

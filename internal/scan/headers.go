@@ -52,11 +52,13 @@ func checkHeaders(p *page) []Finding {
 
 	// Content-Security-Policy
 	const cspRisk = "Without a Content Security Policy, any script an attacker manages to inject into a page (cross-site scripting) runs with full access to your users' sessions and data. A policy tells the browser which scripts and resources are allowed, so injected ones are blocked."
-	const cspAdvice = "Start with the policy below in Content-Security-Policy-Report-Only, watch the browser console for violations, then switch to the enforcing header. Frameworks that emit inline scripts (Next.js included) need a nonce-based policy rather than this static one."
+	const cspAdvice = "Start with this policy in Content-Security-Policy-Report-Only, watch the browser console for violations, then switch to the enforcing header. Frameworks that emit inline scripts (Next.js included) need a nonce-based policy rather than this static one."
 	policies := h.Values("Content-Security-Policy")
 	var policy csp
 	switch {
 	case len(policies) > 0:
+		// shortcut: only the first policy is analysed; browsers enforce all of
+		// them together. Evaluate each one if sites with several show up.
 		policy = parseCSP(policies[0])
 		out = append(out, evaluateCSP(policy, policies[0])...)
 	case metaCSP.Match(p.body):

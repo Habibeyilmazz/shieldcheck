@@ -12,20 +12,19 @@ var Platforms = []struct{ ID, Name string }{
 	{"nextjs", "Next.js"}, {"vercel", "Vercel"}, {"netlify", "Netlify"},
 }
 
-var where = map[string]string{
-	"nginx":   "nginx: inside the server { } block",
-	"apache":  "Apache: virtual host or .htaccess",
-	"caddy":   "Caddyfile: inside the site block",
-	"nextjs":  "next.config.js",
-	"vercel":  "vercel.json",
-	"netlify": "netlify.toml",
+// headerFiles says where each platform's header configuration goes.
+var headerFiles = []string{
+	"nginx: inside the server { } block", "Apache: virtual host or .htaccess",
+	"Caddyfile: inside the site block", "next.config.js", "vercel.json", "netlify.toml",
 }
 
-// six builds one fix per platform, in Platforms order.
+// six builds one fix per platform, in Platforms order. Some "snippets" are a
+// sentence saying the platform already handles it, so the caption is just the
+// platform name.
 func six(snippets ...string) []Fix {
 	fixes := make([]Fix, len(Platforms))
 	for i, p := range Platforms {
-		fixes[i] = Fix{p.ID, where[p.ID], snippets[i]}
+		fixes[i] = Fix{p.ID, p.Name, snippets[i]}
 	}
 	return fixes
 }
@@ -50,7 +49,7 @@ func lines(pairs [][2]string, format, sep string) string {
 
 // headersFix returns the config that makes each platform send the given headers.
 func headersFix(pairs [][2]string) []Fix {
-	return six(
+	fixes := six(
 		"# add_header inside a location { } block replaces inherited headers,\n# so repeat these there if you use one.\n"+
 			lines(pairs, "add_header %s %s always;", "\n"),
 		"# needs mod_headers (a2enmod headers)\n"+lines(pairs, "Header always set %s %s", "\n"),
@@ -63,12 +62,16 @@ func headersFix(pairs [][2]string) []Fix {
 			"\n      ]\n    }\n  ]\n}",
 		"[[headers]]\n  for = \"/*\"\n  [headers.values]\n"+lines(pairs, "    %s = %s", "\n"),
 	)
+	for i := range fixes {
+		fixes[i].Where = headerFiles[i]
+	}
+	return fixes
 }
 
 // withHeader marks f as fixed by sending one response header.
 func withHeader(f Finding, name, value string) Finding {
-	f.header = [2]string{name, value}
-	f.Fixes = headersFix([][2]string{f.header})
+	f.Header = &Header{name, value}
+	f.Fixes = headersFix([][2]string{{name, value}})
 	return f
 }
 

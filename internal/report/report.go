@@ -113,14 +113,19 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 		if f.Risk != "" {
 			p("%s\n", wrap("Risk: "+f.Risk, indent, 66))
 		}
+		advice := "Fix: " + f.Advice
+		if h := f.Header; h != nil {
+			p("%sFix: send %s: %s\n", indent, h.Name, h.Value)
+			advice = f.Advice
+		}
 		if f.Advice != "" {
-			p("%s\n", wrap("Fix: "+f.Advice, indent, 66))
+			p("%s\n", wrap(advice, indent, 66))
 		}
 		for _, fix := range f.Fixes {
 			if o.Platform == "" || (fix.Platform != "any" && fix.Platform != o.Platform) {
 				continue
 			}
-			p("%s%s\n", indent, paint("2", fix.Where+":"))
+			p("%s%s\n", indent, paint("2", sanitize(fix.Where)+":"))
 			for line := range strings.SplitSeq(sanitize(fix.Snippet), "\n") {
 				p("%s  %s\n", indent, paint("36", line))
 			}

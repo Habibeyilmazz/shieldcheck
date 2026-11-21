@@ -116,7 +116,11 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		if port := p.final.URL.Port(); port != "" && port != "443" {
 			return out // a non-standard HTTPS port has no matching HTTP port to test
 		}
-		u := &url.URL{Scheme: "http", Host: p.final.URL.Hostname(), Path: "/"}
+		host := p.final.URL.Hostname()
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]" // IPv6 literal
+		}
+		u := &url.URL{Scheme: "http", Host: host, Path: "/"}
 		resp, err := c.get(ctx, u)
 		if err != nil {
 			return append(out, f("https.no-http", Pass, "Plain HTTP is not offered", "Port 80 did not answer.", "", "", nil))

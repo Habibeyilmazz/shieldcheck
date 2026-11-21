@@ -75,17 +75,18 @@ func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
 }
 
 // parseArgs lets flags come before or after positional arguments, which the
-// flag package does not do by itself.
+// flag package does not do by itself. Everything after "--" is positional.
 func parseArgs(fs *flag.FlagSet, args []string) (positional []string, err error) {
 	for {
 		if err := fs.Parse(args); err != nil {
 			return nil, err
 		}
-		if fs.NArg() == 0 {
-			return positional, nil
+		rest := fs.Args()
+		if n := len(args) - len(rest); len(rest) == 0 || (n > 0 && args[n-1] == "--") {
+			return append(positional, rest...), nil
 		}
-		positional = append(positional, fs.Arg(0))
-		args = fs.Args()[1:]
+		positional = append(positional, rest[0])
+		args = rest[1:]
 	}
 }
 

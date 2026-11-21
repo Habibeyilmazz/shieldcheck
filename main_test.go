@@ -42,6 +42,11 @@ func TestParseArgsAcceptsFlagsAnywhere(t *testing.T) {
 	if err != nil || !slices.Equal(pos, []string{"example.com", "extra"}) || *format != "json" || !*probe {
 		t.Errorf("pos=%v format=%q probe=%v err=%v", pos, *format, *probe, err)
 	}
+	*probe = false
+	pos, err = parseArgs(fs, []string{"a", "--", "--probe", "b"})
+	if err != nil || !slices.Equal(pos, []string{"a", "--probe", "b"}) || *probe {
+		t.Errorf("after --: pos=%v probe=%v err=%v", pos, *probe, err)
+	}
 }
 
 func TestScanCommand(t *testing.T) {

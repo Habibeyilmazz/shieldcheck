@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -195,16 +196,16 @@ func TestBadPlainHTTPSite(t *testing.T) {
 }
 
 func TestProbesOnlyRunWhenAsked(t *testing.T) {
-	var probed []string
+	var probed atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/.git") || r.URL.Path == "/.env" {
-			probed = append(probed, r.URL.Path)
+			probed.Add(1)
 		}
 	}))
 	defer srv.Close()
 	rep := run(t, srv.URL, Options{})
-	if len(probed) > 0 {
-		t.Errorf("requested %v without Probe", probed)
+	if probed.Load() > 0 {
+		t.Error("requested /.git or /.env without Probe")
 	}
 	if _, ok := ids(rep.Findings)["exposed.none"]; ok {
 		t.Error("reported probe results without probing")
@@ -263,18 +264,10 @@ func TestRedirectChainIsRecorded(t *testing.T) {
 }
 
 func TestDowngradeRedirect(t *testing.T) {
-	var plainURL string
-	secure := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/back", http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, plainURL, http.StatusFound)
-	}), nil)
 	second := tlsServer(t, goodSite(), nil)
 	plain := httptest.NewServer(http.RedirectHandler(second.URL+"/", http.StatusFound))
 	defer plain.Close()
-	plainURL = plain.URL
+	secure := tlsServer(t, http.RedirectHandler(plain.URL+"/", http.StatusFound), nil)
 	rep := run(t, secure.URL, Options{})
 	wantIDs(t, ids(rep.Findings), "redirect.downgrade")
 }
@@ -322,8 +315,8 @@ func TestIsPublic(t *testing.T) {
 }
 
 func TestPrivateTargetsAreBlocked(t *testing.T) {
-	hit := false
-	srv := tlsServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }), nil)
+	var hit atomic.Bool
+	srv := tlsServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit.Store(true) }), nil)
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	for _, target := range []string{
 		srv.URL,                     // literal loopback IP
@@ -340,7 +333,7 @@ func TestPrivateTargetsAreBlocked(t *testing.T) {
 			t.Errorf("%s: err = %v, want BlockedError", target, err)
 		}
 	}
-	if hit {
+	if hit.Load() {
 		t.Error("a request reached the private server")
 	}
 

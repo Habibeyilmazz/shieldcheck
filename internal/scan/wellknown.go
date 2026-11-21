@@ -22,7 +22,7 @@ func checkSecurityTxt(ctx context.Context, c *client, final *url.URL) []Finding 
 	u := final.ResolveReference(&url.URL{Path: "/.well-known/security.txt"})
 	fix := anyFix("File served at "+u.String(), fmt.Sprintf(
 		"Contact: mailto:security@%s\nExpires: %s\nPreferred-Languages: en",
-		final.Hostname(), time.Now().UTC().AddDate(1, 0, 0).Format("2006-01-02T15:04:05Z")))
+		strings.TrimPrefix(final.Hostname(), "www."), time.Now().UTC().AddDate(1, 0, 0).Format("2006-01-02T15:04:05Z")))
 	const advice = "Use a contact address that is actually read. With Next.js, Vercel or Netlify, put the file at public/.well-known/security.txt (or the same path in your publish directory)."
 
 	hops, body, err := c.follow(ctx, u)

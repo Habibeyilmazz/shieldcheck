@@ -290,3 +290,16 @@ func TestHeadersFixSnippetsAreWellFormed(t *testing.T) {
 		}
 	}
 }
+
+func TestClip(t *testing.T) {
+	if got := clip("  a\tb\r\n c  "); got != "a b c" {
+		t.Errorf("clip whitespace = %q", got)
+	}
+	long := clip(strings.Repeat("é", 300))
+	if n := len([]rune(long)); n != 201 || !strings.HasSuffix(long, "…") {
+		t.Errorf("clip kept %d runes", n)
+	}
+	if got := clip("ok\xff\xfe"); got != "ok?" {
+		t.Errorf("clip invalid UTF-8 = %q", got)
+	}
+}
