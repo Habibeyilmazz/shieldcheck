@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Cookie names that usually carry a login. CSRF tokens are left out on
@@ -25,13 +26,22 @@ func checkCookies(p *page) []Finding {
 	for _, h := range p.hops {
 		for _, c := range h.Cookies {
 			key := h.URL.Hostname() + " " + c.Name
-			if _, ok := seen[key]; !ok {
+			if c.MaxAge < 0 || (!c.Expires.IsZero() && c.Expires.Before(time.Now())) {
+				delete(seen, key) // an expired cookie is a deletion: nothing is stored
+				continue
+			}
+			seen[key] = c
+		}
+	}
+	// Report in the order the cookies were first seen.
+	for _, h := range p.hops {
+		for _, c := range h.Cookies {
+			if key := h.URL.Hostname() + " " + c.Name; seen[key] != nil && !slices.Contains(keys, key) {
 				keys = append(keys, key)
 				if !slices.Contains(names, c.Name) {
 					names = append(names, c.Name)
 				}
 			}
-			seen[key] = c
 		}
 	}
 	if len(names) == 0 {

@@ -179,6 +179,21 @@ func TestCookies(t *testing.T) {
 	if got := check(); got["cookie.none"] != Pass {
 		t.Errorf("no cookies: %v", got)
 	}
+	// Expiring a cookie (logout, cookie cleanup) sets nothing, so it has no flags to judge.
+	gone := []*http.Cookie{{Name: "sessionid", MaxAge: -1}, {Name: "sid", Expires: time.Unix(1, 0)}}
+	if got := check(gone...); got["cookie.none"] != Pass || len(got) != 1 {
+		t.Errorf("expired cookies: %v", got)
+	}
+	// ...and it removes an earlier cookie of the same name, as in a browser; a later set brings it back.
+	first := hop{URL: u, Cookies: []*http.Cookie{{Name: "sid"}}}
+	del := hop{URL: u, Cookies: []*http.Cookie{{Name: "sid", MaxAge: -1}}}
+	if got := ids(checkCookies(&page{hops: []hop{first, del}, final: del})); got["cookie.none"] != Pass {
+		t.Errorf("set then deleted: %v", got)
+	}
+	again := hop{URL: u, Cookies: []*http.Cookie{{Name: "sid"}}}
+	if got := ids(checkCookies(&page{hops: []hop{first, del, again}, final: again})); got["cookie.no-httponly"] != Medium {
+		t.Errorf("set, deleted, set again: %v", got)
+	}
 }
 
 func TestMixedContentRespectsUpgradeInsecureRequests(t *testing.T) {
