@@ -22,7 +22,7 @@ func sample() *scan.Report {
 				Fixes: []scan.Fix{{Platform: "nginx", Where: "nginx: server block", Snippet: `add_header Content-Security-Policy "default-src 'self'" always;`},
 					{Platform: "caddy", Where: "Caddyfile", Snippet: `header Content-Security-Policy "default-src 'self'"`}}},
 			{ID: "disclosure.version", Category: "disclosure", Severity: scan.Low, Title: "Response headers reveal server software",
-				Detail: "Server: <script>alert(1)</script>\x1b[2J\x1b]0;owned\x07/1.0", Risk: "Version leak."},
+				Detail: "Server: <script>alert(1)</script>\x1b[2J\x1b]0;owned\x07/1.0 ‮desrever‬", Risk: "Version leak."},
 			{ID: "spf.missing", Category: "dns", Severity: scan.Medium, Title: "No SPF record", Risk: "Spoofing.",
 				Fixes: []scan.Fix{{Platform: "any", Where: "DNS TXT record", Snippet: `fixture.test.  TXT  "v=spf1 -all"`}}},
 			{ID: "hsts.ok", Category: "headers", Severity: scan.Pass, Title: "HSTS is enabled"},
@@ -41,7 +41,7 @@ func TestTerminal(t *testing.T) {
 			t.Errorf("terminal output lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.ContainsAny(out, "\x1b\x07") {
+	if strings.ContainsAny(out, "\x1b\x07‮‬") {
 		t.Errorf("escape sequences from the scanned site reached the terminal: %q", out)
 	}
 	if strings.Contains(out, "add_header") {

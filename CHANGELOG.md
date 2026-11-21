@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security (security round 11)
+
+- Terminal report: bidi control characters (U+202E and friends, "Trojan
+  Source") in text taken from the scanned site are now dropped along with
+  other control characters, so a hostile header or certificate name cannot
+  make a line display in a different order from what the site sent.
+
+### Notes (security round 11)
+
+- Checked by running `serve` on 4116: a foreign `Host`, cross-site
+  `Sec-Fetch-Site`, a `/scan` without that header and POST are refused; scans
+  of `127.0.0.1` and `169.254.169.254` and a malformed ignore list get 400.
+  The action passes inputs through the environment; workflow actions are
+  pinned to SHAs. The git history has no secrets and one author identity.
+- govulncheck v1.9.0 with local Go 1.27.3: only GO-2026-6859 (standard
+  library, fixed in Go 1.27.4); CI's vulncheck job uses the latest stable Go.
+- Still open: SARIF suppressions, Windows console, `go.mod` at `go 1.25`.
+- Commits from this round are co-authored by Claude Opus 5.5.
+
 ### Changed (design round 10)
 
 - Web UI and HTML report: "Ignore this finding" and the HTML/JSON/SARIF

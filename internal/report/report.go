@@ -54,10 +54,11 @@ var ansi = map[scan.Severity]string{
 }
 
 // sanitize drops control characters so that text taken from the scanned site
-// cannot inject terminal escape sequences.
+// cannot inject terminal escape sequences, nor bidi overrides that make the
+// report display text in a different order from what the site sent.
 func sanitize(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) && r != '\n' {
+		if (unicode.IsControl(r) && r != '\n') || unicode.Is(unicode.Bidi_Control, r) {
 			return -1
 		}
 		return r
