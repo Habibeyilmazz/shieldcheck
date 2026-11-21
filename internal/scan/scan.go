@@ -195,6 +195,17 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 		}
 		return nil, fmt.Errorf("could not fetch %s: %w", target, err)
 	}
+	if !implied && target.Scheme == "http" {
+		// Asked for over http:// and never redirected to HTTPS. If the same
+		// address works on https://, grade that, as if https:// had been typed:
+		// the site has HTTPS and what is wrong is the missing redirect (high),
+		// not "no HTTPS" (critical).
+		if twin := httpsTwin(hops[len(hops)-1].URL); twin != nil {
+			if h, b := c.followIfTrusted(ctx, twin); h != nil {
+				target, hops, body = twin, h, b
+			}
+		}
+	}
 	p := &page{hops: hops, final: hops[len(hops)-1], body: body}
 
 	rep := &Report{

@@ -221,6 +221,55 @@ func TestPlainHTTPIsCriticalExceptOnLoopback(t *testing.T) {
 	}
 }
 
+func TestHTTPSTwin(t *testing.T) {
+	for raw, want := range map[string]string{
+		"http://fixture.test/a?b=1": "https://fixture.test/a?b=1",
+		"http://fixture.test:80/":   "https://fixture.test/",
+		"http://[2001:db8::1]/":     "https://[2001:db8::1]/",
+		"http://fixture.test:8080/": "", // no HTTPS port to guess
+		"http://localhost/":         "", // local addresses are not graded on HTTPS
+		"http://127.0.0.1/":         "",
+		"https://fixture.test/":     "",
+	} {
+		u, _ := url.Parse(raw)
+		got := ""
+		if twin := httpsTwin(u); twin != nil {
+			got = twin.String()
+		}
+		if got != want {
+			t.Errorf("httpsTwin(%s) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+// An http:// scan is only moved to the https:// address when that address
+// would work in a browser.
+func TestFollowIfTrusted(t *testing.T) {
+	secure := tlsServer(t, goodSite(), nil)
+	u, _ := url.Parse(secure.URL + "/")
+	ctx := context.Background()
+
+	hops, body := newClient(Options{AllowPrivate: true, RootCAs: trust(secure)}).followIfTrusted(ctx, u)
+	if len(hops) != 1 || hops[0].Status != 200 || !strings.Contains(string(body), "<title>ok</title>") {
+		t.Errorf("trusted certificate: hops %+v, body %q", hops, body)
+	}
+	if hops, _ := newClient(Options{AllowPrivate: true}).followIfTrusted(ctx, u); hops != nil {
+		t.Error("followed an HTTPS address whose certificate browsers reject")
+	}
+
+	plain := httptest.NewServer(goodSite())
+	defer plain.Close()
+	back := tlsServer(t, http.RedirectHandler(plain.URL+"/", http.StatusFound), nil)
+	u, _ = url.Parse(back.URL + "/")
+	if hops, _ := newClient(Options{AllowPrivate: true, RootCAs: trust(back)}).followIfTrusted(ctx, u); hops != nil {
+		t.Error("followed an HTTPS address that redirects back to plain HTTP")
+	}
+	down, _ := url.Parse("https://" + plain.Listener.Addr().String() + "/")
+	if hops, _ := newClient(Options{AllowPrivate: true}).followIfTrusted(ctx, down); hops != nil {
+		t.Error("followed an address that does not speak TLS")
+	}
+}
+
 func TestProbesOnlyRunWhenAsked(t *testing.T) {
 	var probed atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

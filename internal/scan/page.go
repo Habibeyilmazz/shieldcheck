@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/netip"
@@ -110,7 +111,7 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		}
 		return []Finding{f("https.missing", Critical, "Site is served over plain HTTP",
 			"The final URL is "+p.final.URL.String()+".", plainRisk,
-			"Get a certificate (Let's Encrypt is free), serve the site over HTTPS, then redirect HTTP to it. If the site already answers on https://, only the redirect is missing: add it, and scan the https:// address to have the certificate, TLS versions and HSTS checked.", httpsRedirectFix)}
+			"Get a certificate (Let's Encrypt is free), serve the site over HTTPS, then redirect HTTP to it.", httpsRedirectFix)}
 	}
 	for i := 1; i < len(p.hops); i++ {
 		if p.hops[i-1].URL.Scheme == "https" && p.hops[i].URL.Scheme == "http" {
@@ -150,6 +151,38 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		}
 	}
 	return append(out, httpRedirectFinding(chain))
+}
+
+// httpsTwin is the https:// address a browser would try for a page that was
+// served over plain HTTP: same host, path and query on port 443. It is nil
+// when there is none to try: the page is already HTTPS, on a local address
+// (not graded on HTTPS at all) or on a port of its own.
+func httpsTwin(u *url.URL) *url.URL {
+	if u.Scheme != "http" || isLoopbackHost(u.Hostname()) || (u.Port() != "" && u.Port() != "80") {
+		return nil
+	}
+	twin := *u
+	twin.Scheme, twin.Host = "https", u.Hostname()
+	if strings.Contains(twin.Host, ":") {
+		twin.Host = "[" + twin.Host + "]" // IPv6 literal
+	}
+	return &twin
+}
+
+// followIfTrusted fetches an https:// URL, but only if its host presents a
+// certificate browsers accept and the redirects stay on HTTPS. Otherwise it
+// returns nil: a host that answers on port 443 with some other site's
+// certificate does not have working HTTPS.
+func (c *client) followIfTrusted(ctx context.Context, u *url.URL) ([]hop, []byte) {
+	state, err := c.handshake(ctx, hostPort(u), u.Hostname(), tls.VersionTLS10, tls.VersionTLS13)
+	if err != nil || len(state.PeerCertificates) == 0 || judgeChain(state.PeerCertificates, u.Hostname(), c.rootCAs) != nil {
+		return nil, nil
+	}
+	hops, body, err := c.follow(ctx, u)
+	if err != nil || hops[len(hops)-1].URL.Scheme != "https" {
+		return nil, nil
+	}
+	return hops, body
 }
 
 // isLoopbackHost reports whether host names this machine: localhost, a
