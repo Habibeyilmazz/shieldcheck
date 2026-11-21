@@ -179,6 +179,7 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 	if o.LookupTXT == nil {
 		o.LookupTXT = net.DefaultResolver.LookupTXT
 	}
+	outer := ctx
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
 	c := newClient(o)
@@ -260,6 +261,15 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 		wg.Go(func() { add(checkProbes(ctx, c, p.final.URL)) })
 	}
 	wg.Wait()
+
+	// Checks that were cut off report "could not be checked" and so cost no
+	// points: a partial scan would grade better than a complete one.
+	if outer.Err() != nil {
+		return nil, errors.New("scan interrupted before it finished")
+	}
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("scan did not finish within %s; raise --timeout if the site is just slow", o.Timeout)
+	}
 
 	finish(rep, findings)
 	rep.DurationMs = time.Since(start).Milliseconds()

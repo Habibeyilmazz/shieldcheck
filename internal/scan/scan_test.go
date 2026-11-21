@@ -557,6 +557,26 @@ func TestFailedRequestsAreNotReportedAsClean(t *testing.T) {
 	}
 }
 
+// A scan cut short must fail, not return a report whose missing checks make
+// the grade better than the site deserves (and pass --min-grade in CI).
+func TestUnfinishedScanIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			<-r.Context().Done()
+		}
+	}))
+	defer srv.Close()
+	_, err := Run(context.Background(), srv.URL, Options{AllowPrivate: true, Timeout: 300 * time.Millisecond})
+	if err == nil || !strings.Contains(err.Error(), "did not finish") {
+		t.Errorf("deadline: err = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if _, err := Run(ctx, srv.URL, Options{AllowPrivate: true}); err == nil || !strings.Contains(err.Error(), "interrupted") {
+		t.Errorf("cancelled: err = %v", err)
+	}
+}
+
 func TestOversizedResponsesAreRefused(t *testing.T) {
 	huge := strings.Repeat("a", 100<<10)
 	header := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("X-Padding", huge) }))
