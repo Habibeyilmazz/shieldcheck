@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -266,8 +268,12 @@ func parseHSTS(v string) (maxAge int, subdomains bool) {
 		k, val, _ := strings.Cut(strings.TrimSpace(part), "=")
 		switch strings.ToLower(strings.TrimSpace(k)) {
 		case "max-age":
-			if n, err := strconv.Atoi(strings.Trim(strings.TrimSpace(val), `"`)); err == nil {
-				maxAge = n
+			n, err := strconv.ParseInt(strings.Trim(strings.TrimSpace(val), `"`), 10, 64)
+			if errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(strings.TrimSpace(val), "-") {
+				n, err = math.MaxInt32, nil // browsers clamp a huge max-age; it is not "off"
+			}
+			if err == nil {
+				maxAge = int(min(n, math.MaxInt32))
 			}
 		case "includesubdomains":
 			subdomains = true

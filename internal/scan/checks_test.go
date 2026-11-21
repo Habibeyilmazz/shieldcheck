@@ -115,6 +115,7 @@ func TestHeaderVariants(t *testing.T) {
 		{"HSTS without max-age", "Strict-Transport-Security", "includeSubDomains", "", "hsts.disabled"},
 		{"HSTS short", "Strict-Transport-Security", "max-age=86400; includeSubDomains", "", "hsts.short"},
 		{"HSTS quoted", "Strict-Transport-Security", `max-age="31536000"; includeSubDomains; preload`, "", "hsts.ok"},
+		{"HSTS max-age too big for an int", "Strict-Transport-Security", "max-age=99999999999999999999; includeSubDomains", "", "hsts.ok"},
 		{"HSTS no subdomains", "Strict-Transport-Security", "max-age=31536000", "", "hsts.no-subdomains"},
 		{"XFO sameorigin", "X-Frame-Options", "sameorigin", "", "frame.ok"},
 		{"XFO allow-from is obsolete", "X-Frame-Options", "ALLOW-FROM https://a.test", "", "frame.missing"},
