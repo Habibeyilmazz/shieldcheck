@@ -230,7 +230,8 @@ func TestMailDomains(t *testing.T) {
 		"::1":                   nil,
 		"localhost":             nil,
 		"dev.localhost":         nil,
-		"a.b.c.d.e.example.com": {"a.b.c.d.e.example.com", "b.c.d.e.example.com", "c.d.e.example.com", "d.e.example.com"},
+		// Deep names are capped at four lookups but must still reach the registrable domain.
+		"a.b.c.d.e.example.com": {"a.b.c.d.e.example.com", "d.e.example.com", "e.example.com", "example.com"},
 		// The walk stops at the registrable domain, not at the registry above it.
 		"www.example.com.tr": {"example.com.tr"},
 		"shop.example.co.uk": {"shop.example.co.uk", "example.co.uk"},

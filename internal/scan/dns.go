@@ -39,8 +39,11 @@ func mailDomains(host string) []string {
 		shortest = 3 // "co.uk" is a registry, not the parent domain of example.co.uk
 	}
 	var out []string
-	for i := 0; i+shortest <= len(labels) && len(out) < 4; i++ {
+	for i := 0; i+shortest <= len(labels); i++ {
 		out = append(out, strings.Join(labels[i:], "."))
+	}
+	if len(out) > 4 { // cap the lookups, but keep the host and always reach the registrable domain
+		out = append(out[:1], out[len(out)-3:]...)
 	}
 	return out
 }
