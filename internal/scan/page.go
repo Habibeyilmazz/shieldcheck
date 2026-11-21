@@ -110,7 +110,7 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		}
 		return []Finding{f("https.missing", Critical, "Site is served over plain HTTP",
 			"The final URL is "+p.final.URL.String()+".", plainRisk,
-			"Get a certificate (Let's Encrypt is free), serve the site over HTTPS, then redirect HTTP to it.", httpsRedirectFix)}
+			"Get a certificate (Let's Encrypt is free), serve the site over HTTPS, then redirect HTTP to it. If the site already answers on https://, only the redirect is missing: add it, and scan the https:// address to have the certificate, TLS versions and HSTS checked.", httpsRedirectFix)}
 	}
 	for i := 1; i < len(p.hops); i++ {
 		if p.hops[i-1].URL.Scheme == "https" && p.hops[i].URL.Scheme == "http" {

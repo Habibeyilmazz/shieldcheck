@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const Version = "0.1.1"
@@ -138,6 +139,11 @@ func NormalizeURL(raw string) (u *url.URL, implied bool, err error) {
 	}
 	if u.User != nil {
 		return nil, false, errors.New("URLs with embedded credentials are not accepted")
+	}
+	if strings.ContainsFunc(u.Hostname(), func(r rune) bool { return r > unicode.MaxASCII }) {
+		// The TLS and DNS checks compare names byte for byte, so a Unicode
+		// hostname would be reported as a certificate that does not match.
+		return nil, false, errors.New("hostnames with non-ASCII letters are not supported: give the domain in its xn-- form")
 	}
 	u.Fragment = ""
 	if u.Path == "" {

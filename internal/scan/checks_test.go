@@ -27,7 +27,7 @@ func TestNormalizeURL(t *testing.T) {
 			t.Errorf("NormalizeURL(%q) = %v, %v; want %s", in, u, err, want)
 		}
 	}
-	for _, in := range []string{"", "ftp://example.com", "file:///etc/passwd", "javascript://x", "https://", "https://user:pw@example.com", "https://exa mple.com", strings.Repeat("a", 3000)} {
+	for _, in := range []string{"", "ftp://example.com", "file:///etc/passwd", "javascript://x", "https://", "https://user:pw@example.com", "https://exa mple.com", "https://bücher.example", strings.Repeat("a", 3000)} {
 		if u, _, err := NormalizeURL(in); err == nil {
 			t.Errorf("NormalizeURL(%q) = %s, want an error", in, u)
 		}
