@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed (design round 10)
+
+- Web UI and HTML report: "Ignore this finding" and the HTML/JSON/SARIF
+  download links are now at least 24 px tall (were 17 and 21 px); the `--probe`
+  checkbox is larger and centred on its label instead of sitting on the
+  baseline.
+- Terminal report: "Fix: send Header: value" now reads "Fix: Send ...", like
+  every other fix line.
+- README screenshots retaken from the running UI (example.com, light and dark).
+
+### Notes (design round 10)
+
+- Looked at real screenshots at 1280 px and 390 px, light and dark: home,
+  error, report; keyboard focus rings and reduced-motion spinner were already
+  fine. Nothing else looked broken or cramped, so nothing else was changed.
+- proxy.golang.org lists v0.1.3 but `@latest` still answered v0.1.2 (proxy
+  cache, not a repo problem; it refreshes on its own).
+- Still open: SARIF suppressions, Windows console. Processes on 4110-4114 were
+  not started by this round and were left alone; this round used 4116.
+- Commits from this round are co-authored by Claude Opus 5.5.
+
 ## [0.1.3] - 2026-11-22
 
 This release ships `--ignore` (CLI, action input and web UI) and the fixes
