@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (perf-a11y round 16)
+
+- SARIF: findings ignored with `--ignore` or in the web UI are now results
+  carrying `suppressions` (`external`, `accepted`), so GitHub code scanning
+  shows them as dismissed instead of not at all. They stay out of the grade.
+- `e2e/ui.mjs`: a Playwright check of `shieldcheck serve` in Chromium (one h1,
+  `lang`, scan by form submit, every link/button/input has a name, no console
+  errors). Not run in CI (it needs a Playwright install); run it by hand with
+  `NODE_PATH=<dir with playwright> node e2e/ui.mjs` after `go build`.
+
+### Notes (perf-a11y round 16)
+
+- Measured, nothing worth changing: binary 13.9 MB, `shieldcheck version`
+  7 ms, UI home page 12.4 KB with no external requests, first load in
+  Chromium 53 ms. The page is small enough that compression or splitting would
+  add code for no visible gain.
+- No unused code or dependencies found (standard library only).
+- Still open: job summary not seen rendered on GitHub, Windows console colour,
+  Playwright test is manual. Ports 4110-4114 held by earlier-round processes
+  were left alone.
+- Commits from this round are co-authored by Claude Fable 5.2.
+
 ### Added (feature round 15)
 
 - Subresource Integrity check: scripts (`<script src>`) and stylesheets
