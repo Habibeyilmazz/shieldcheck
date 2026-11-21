@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (feature round 15)
+
+- Subresource Integrity check: scripts (`<script src>`) and stylesheets
+  (`<link rel=stylesheet>`) loaded from another site without an `integrity`
+  attribute are reported as `sri.missing` (low), with the risk, a sample of
+  the URLs and an HTML snippet showing `integrity` plus `crossorigin` and the
+  `openssl` command that computes the hash. Passes are `sri.ok` (all hashed)
+  and `sri.none` (nothing from other sites). "Another site" means a different
+  registrable domain, using the same heuristic as the SPF/DMARC walk, so
+  `cdn.example.com` on `www.example.com` is not flagged. Only the page
+  already fetched is read; no third-party file is requested.
+
+### Notes (feature round 15)
+
+- Picked because it was on the roadmap and a supply-chain compromise of a
+  CDN script (polyfill.io) is a risk a passive scan can show; a multi-URL scan
+  was the other candidate but changes every output format and the action's
+  outputs.
+- Checked against a fixture page on 4117 (terminal, `--fix`, Markdown,
+  SARIF, HTML) and a real scan of example.com (now `sri.none`, 6 passed).
+- Ports 4110-4114 were already held by fixture and serve processes from an
+  earlier round; they were left alone.
+- Still open from earlier rounds: job summary not seen rendered on GitHub,
+  SARIF suppressions, Windows console colour.
+- Commits from this round are co-authored by Claude Opus 5.5.
+
 ### Fixed (reliability round 13)
 
 - A scan cut short by `--timeout` or Ctrl-C after the first response used to

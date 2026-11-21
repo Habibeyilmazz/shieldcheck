@@ -316,3 +316,63 @@ func checkContent(p *page) []Finding {
 	}
 	return out
 }
+
+var (
+	sriTag       = regexp.MustCompile(`(?is)<(script|link)\b([^>]*)>`)
+	sriURL       = regexp.MustCompile(`(?i)(?:^|\s)(?:src|href)\s*=\s*["']?\s*((?:https?:)?//[^"'\s>]+)`)
+	sriIntegrity = regexp.MustCompile(`(?i)(?:^|\s)integrity\s*=`)
+)
+
+// siteOf is the registrable domain of host (the shortest of mailDomains), so
+// cdn.example.com counts as the same site as www.example.com. Hosts that
+// mailDomains does not walk (IP addresses, .test, .localhost) stand alone.
+func siteOf(host string) string {
+	if d := mailDomains(host); len(d) > 0 {
+		return d[len(d)-1]
+	}
+	return strings.TrimSuffix(strings.ToLower(host), ".")
+}
+
+// checkSRI looks for scripts and stylesheets loaded from another site without
+// a Subresource Integrity hash. It only reads the page already fetched: the
+// third-party files are never requested.
+func checkSRI(p *page) []Finding {
+	if !strings.Contains(p.final.Header.Get("Content-Type"), "html") {
+		return nil
+	}
+	own := siteOf(p.final.URL.Hostname())
+	var missing []string
+	total := 0
+	for _, m := range sriTag.FindAllSubmatch(htmlComment.ReplaceAll(p.body, nil), -1) {
+		attrs := m[2]
+		if strings.EqualFold(string(m[1]), "link") && !stylesheet.Match(attrs) {
+			continue
+		}
+		a := sriURL.FindSubmatch(attrs)
+		if a == nil {
+			continue
+		}
+		u, err := p.final.URL.Parse(string(a[1]))
+		if err != nil || u.Hostname() == "" || siteOf(u.Hostname()) == own {
+			continue
+		}
+		total++
+		if !sriIntegrity.Match(attrs) {
+			missing = append(missing, u.String())
+		}
+	}
+	switch {
+	case total == 0:
+		return []Finding{{ID: "sri.none", Category: "content", Severity: Pass, Title: "No scripts or stylesheets from other sites"}}
+	case len(missing) == 0:
+		return []Finding{{ID: "sri.ok", Category: "content", Severity: Pass,
+			Title: "Scripts and stylesheets from other sites carry integrity hashes", Detail: fmt.Sprintf("%d checked.", total)}}
+	}
+	return []Finding{{ID: "sri.missing", Category: "content", Severity: Low,
+		Title:  "Scripts or stylesheets from other sites have no integrity hash",
+		Detail: fmt.Sprintf("%d of %d without integrity, for example %s.", len(missing), total, clip(strings.Join(missing[:min(len(missing), 3)], ", "))),
+		Risk:   "A script from a CDN or another company's server runs with full access to your page. If that server is compromised or the domain changes hands, as happened to polyfill.io in 2024, every visitor runs the attacker's code. An integrity hash makes the browser refuse a file that has changed.",
+		Advice: "Load a pinned version of each file and add its hash in an integrity attribute, with crossorigin=\"anonymous\". Files that change by design, such as tag managers or Google Fonts CSS, cannot be hashed: host a copy yourself, or accept the finding with --ignore sri.missing.",
+		Fixes: anyFix("HTML, for each script or stylesheet from another site",
+			"<!-- the hash: curl -s URL | openssl dgst -sha384 -binary | openssl base64 -A -->\n<script src=\"https://cdn.example/lib@1.2.3/lib.min.js\"\n        integrity=\"sha384-PASTE_THE_HASH_HERE\"\n        crossorigin=\"anonymous\"></script>")}}
+}

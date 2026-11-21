@@ -395,3 +395,33 @@ func TestSecurityTxt(t *testing.T) {
 		}
 	}
 }
+
+func TestSRI(t *testing.T) {
+	u, _ := url.Parse("https://www.example.com/")
+	html := http.Header{"Content-Type": {"text/html; charset=utf-8"}}
+	cases := []struct {
+		name, body, id, detail string
+	}{
+		{"own site, relative and subdomain", `<script src="/app.js"></script><script src="https://cdn.example.com/x.js"></script><link rel=stylesheet href="//static.example.com/s.css">`, "sri.none", ""},
+		{"inline script", `<script>var a = "<script src=x>";</script>`, "sri.none", ""},
+		{"all hashed", `<script src="https://cdn.other.test/x.js" integrity="sha384-abc" crossorigin="anonymous"></script><LINK HREF='https://fonts.other.test/a.css' REL='stylesheet' INTEGRITY='sha384-def'>`, "sri.ok", "2 checked."},
+		{"missing", `<script src="https://cdn.other.test/x.js"></script>
+			<link rel="stylesheet" href="//cdn.other.test/s.css">
+			<script src=https://cdn.other.test/y.js data-integrity="x"></script>
+			<script src="https://cdn.other.test/z.js" integrity="sha384-abc"></script>
+			<link rel="preconnect" href="https://cdn.other.test">
+			<!-- <script src="https://old.other.test/gone.js"></script> -->`,
+			"sri.missing", "3 of 4 without integrity, for example https://cdn.other.test/x.js, https://cdn.other.test/s.css, https://cdn.other.test/y.js."},
+	}
+	for _, c := range cases {
+		h := hop{URL: u, Header: html}
+		fs := checkSRI(&page{hops: []hop{h}, final: h, body: []byte(c.body)})
+		if len(fs) != 1 || fs[0].ID != c.id || (c.detail != "" && fs[0].Detail != c.detail) {
+			t.Errorf("%s: got %+v", c.name, fs)
+		}
+	}
+	h := hop{URL: u, Header: http.Header{"Content-Type": {"application/json"}}}
+	if fs := checkSRI(&page{hops: []hop{h}, final: h, body: []byte(`<script src="https://x.test/a.js">`)}); fs != nil {
+		t.Errorf("non-HTML: got %+v", fs)
+	}
+}

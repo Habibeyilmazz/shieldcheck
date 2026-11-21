@@ -160,7 +160,7 @@ func TestGoodSiteGetsA(t *testing.T) {
 			t.Errorf("unexpected %s finding %s: %s", f.Severity, f.ID, f.Detail)
 		}
 	}
-	wantIDs(t, ids(rep.Findings), "csp.ok", "hsts.ok", "frame.ok", "cookie.ok", "tls.cert-ok", "tls.protocols-ok", "securitytxt.ok", "mixed.none", "exposed.none")
+	wantIDs(t, ids(rep.Findings), "csp.ok", "hsts.ok", "frame.ok", "cookie.ok", "tls.cert-ok", "tls.protocols-ok", "securitytxt.ok", "mixed.none", "sri.none", "exposed.none")
 	if rep.TLS == nil || rep.TLS.Version != "TLS 1.3" {
 		t.Errorf("TLS info = %+v", rep.TLS)
 	}

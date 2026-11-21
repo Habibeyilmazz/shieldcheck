@@ -43,7 +43,7 @@ The start of a real scan of `https://example.com`:
 ```text
   Grade F  9/100
   https://example.com/
-  3 high, 2 medium, 5 low, 1 info, 5 passed
+  3 high, 2 medium, 5 low, 1 info, 6 passed
   TLS 1.3, certificate from Cloudflare TLS Issuing ECC CA 3, expires 25 Dec 2026
 
   HIGH      Plain HTTP does not redirect to HTTPS  https.no-redirect
@@ -54,10 +54,11 @@ The start of a real scan of `https://example.com`:
             Fix: Answer every plain HTTP request with a permanent redirect to
             the same URL on https://.
   ...
-  PASSED (5)
+  PASSED (6)
             Certificate is valid for 34 more days
             No cookies are set by this page
             No mixed content in the page HTML
+            No scripts or stylesheets from other sites
             DMARC policy is enforced (reject)
             SPF record is published
 ```
@@ -70,6 +71,7 @@ The start of a real scan of `https://example.com`:
 | TLS | Certificate trust chain, hostname match and expiry (warns under 30 days, more loudly under 14), for the site and for every HTTPS host that redirects to it; which of TLS 1.0 to 1.3 the server accepts |
 | Cookies | `Secure`, `HttpOnly` (for cookies that look like sessions) and `SameSite`. Only names are reported, never values |
 | Transport | Plain HTTP only, HTTP that does not redirect to HTTPS, redirect chains that drop from HTTPS to HTTP, mixed content in the page HTML |
+| Third-party code | Scripts and stylesheets loaded from another site without a Subresource Integrity (`integrity`) hash. Subdomains of your own domain count as yours; the third-party files are not requested |
 | Email DNS | SPF (missing, duplicate, `+all`, `?all`, no `all`) and DMARC (missing, duplicate, invalid, `p=none`) |
 | Disclosure | `/.well-known/security.txt` presence and `Expires` date. With `--probe`: publicly readable `/.git/HEAD` and `/.env` |
 
@@ -236,7 +238,7 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 - Whatever the URL answers is graded. If that is an error page (a 404, or a 403 from bot protection), the report says so in an info finding, but the grade is still the error page's.
 - A domain with non-ASCII letters has to be given in its `xn--` form.
 - If a response has several Content-Security-Policy headers, only the first is analysed.
-- Mixed content is found by pattern-matching the HTML, not by parsing it.
+- Mixed content and missing integrity hashes are found by pattern-matching the HTML, not by parsing it. The integrity check looks at `<script src>` and `<link rel=stylesheet>` only, and does not check that a hash is correct.
 - The certificate chain is verified against the root store of the machine running the scan, without fetching missing intermediates. A server that omits its intermediate certificate is reported as untrusted, which is how most non-browser clients see it.
 - TLS checks cover protocol versions, not individual cipher suites.
 - How far the fix snippets are tested differs. CI pastes the header, exposed-dotfile and version-disclosure snippets into real nginx, Apache and Caddy (the Ubuntu packages) and requires the rescan to be an A. The TLS, HTTPS-redirect and cookie snippets, and everything for Next.js, Vercel and Netlify, were written from each platform's documentation and not run live; the header snippets for `next.config.js`, `vercel.json` and `netlify.toml` are only syntax-checked.
@@ -257,7 +259,6 @@ Hosted scanners are convenient but cannot reach a dev server or a staging site b
 ## Roadmap
 
 - A container image
-- Subresource Integrity check for third-party scripts and styles
 - Analyse every Content-Security-Policy header, not just the first
 - DNSSEC and CAA record checks
 - Scan a list of URLs in one run

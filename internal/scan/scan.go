@@ -231,6 +231,7 @@ func Run(ctx context.Context, raw string, o Options) (*Report, error) {
 	findings := checkHeaders(p)
 	findings = append(findings, checkCookies(p)...)
 	findings = append(findings, checkContent(p)...)
+	findings = append(findings, checkSRI(p)...)
 	if s := p.final.Status; s >= 400 {
 		// Not a fault of its own, but the reader must know the grade is not
 		// about the page they asked for.
