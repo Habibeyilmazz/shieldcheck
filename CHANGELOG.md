@@ -4,6 +4,63 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-11-22
+
+A second independent first-run review: fresh clone, the release archive and
+`go install` tried as the README says, the whole code read, the web UI driven
+in a browser. Install and quickstart worked as written; these are the things
+that were wrong or confusing after that.
+
+### Fixed
+
+- For a site under a country-code suffix (`www.example.com.tr`,
+  `example.co.uk`) the SPF and DMARC lookup went one level too far, searched
+  `com.tr` / `co.uk`, and the fix told you to publish records there. The walk
+  now stops at the registrable domain for the common second-level labels.
+- A URL that answers with an error status (a 404, or a 403 from bot
+  protection) was graded with nothing in the report to say that an error page
+  was what got graded. There is now an info finding, `page.error-status`.
+- `--fix` in the terminal printed a near-identical config block under every
+  missing header, nine in a row for a bare site. The config for all missing
+  headers is now printed once, as one snippet, after the findings.
+- A redirect chain that drops from HTTPS to HTTP twice produced two findings
+  with the same ID (a duplicate anchor in the HTML report, a duplicate rule in
+  SARIF). It is reported once.
+- Scanning an `http://` address of a site that does have HTTPS advised
+  "get a certificate". The advice now also covers that case.
+- A hostname typed with non-ASCII letters (`bücher.example`) is refused with
+  a message asking for the `xn--` form. It used to be scanned and could come
+  back with a false "certificate does not match the hostname" (critical),
+  because certificates list the `xn--` name.
+- `--fix NGINX` (any case) is accepted.
+- No ANSI colour codes on Windows, where a console prints them as text unless
+  the program switches it over first.
+
+### Added
+
+- CI runs the tests on macOS and Windows, the two systems the release ships
+  binaries for that had never run them.
+- `.gitattributes` keeps LF line endings on every system.
+
+### Notes for whoever works on this next
+
+- Checked and found fine, so no need to redo: the release archive (checksum,
+  unpack, run), `go install ...@latest`, build from source, every README usage
+  example, the web UI in Chromium at desktop and phone width (scan, blocked
+  private target, bad input, downloads, no external requests), `serve`
+  refusing foreign `Host` and cross-site requests.
+- Not verified: the Windows binary in a real console (CI only runs the tests
+  and `version` there). Colour on Windows needs `SetConsoleMode`; see the
+  `shortcut:` comment in `main.go`.
+- Not done: scanning `http://site` when the site has HTTPS is still graded as
+  "plain HTTP" (critical) while `https://site` gets "no redirect" (high). The
+  scan could follow up on HTTPS itself; it only says so in the advice.
+- Converting a Unicode hostname to its `xn--` form needs punycode, which the
+  standard library does not export; that is why such input is refused.
+- Still true from 0.1.1: TLS, HTTPS-redirect and cookie snippets and
+  everything for Next.js, Vercel and Netlify are not run live; no container
+  image.
+
 ## [0.1.1] - 2026-11-22
 
 Fixes from an independent first-run review: a fresh clone, the README followed

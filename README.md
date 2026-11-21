@@ -18,7 +18,7 @@ cd shieldcheck_*_linux_amd64
 ./shieldcheck scan https://your-site.example
 ```
 
-`checksums.txt` on the release page has the SHA-256 of every archive. The binaries are not signed: if macOS refuses to open one downloaded with a browser, run `xattr -d com.apple.quarantine shieldcheck` once.
+On Windows, unpack the `.zip` and run `shieldcheck.exe scan https://your-site.example` in the unpacked folder. `checksums.txt` on the release page has the SHA-256 of every archive. The binaries are not signed: if macOS refuses to open one downloaded with a browser, run `xattr -d com.apple.quarantine shieldcheck` once.
 
 With Go 1.25 or newer you can install it instead:
 
@@ -108,7 +108,7 @@ shieldcheck scan your-site.example --min-grade B          # for CI: fails below 
 
 ### Output formats
 
-- **terminal**: coloured when stdout is a terminal, plain otherwise or with `NO_COLOR` set.
+- **terminal**: coloured when stdout is a terminal, plain otherwise, with `NO_COLOR` set, and always on Windows. With `--fix`, the config for all missing headers is printed once, as one snippet, after the findings.
 - **json**: the full report, including every fix for every platform.
 - **sarif**: SARIF 2.1.0, one rule and one result per finding, for GitHub code scanning (see [GitHub Action](#github-action)). A website has no file to point at, so each result's location is the site written as a path (`your-site.example/`) and the full URL is in the message.
 - **html**: one self-contained file with no external requests. It has the same platform switch and copy buttons as the web UI and works offline.
@@ -131,7 +131,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: Habibeyilmazz/shieldcheck@v0.1.1
+      - uses: Habibeyilmazz/shieldcheck@v0.1.2
         with:
           url: https://your-site.example
           min-grade: B
@@ -139,7 +139,7 @@ jobs:
 
 Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
 
-To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning (this workflow was run against a test site and its upload accepted):
+To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning (this workflow was run against a test site with v0.1.1 and its upload accepted):
 
 ```yaml
 jobs:
@@ -150,7 +150,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v5
-      - uses: Habibeyilmazz/shieldcheck@v0.1.1
+      - uses: Habibeyilmazz/shieldcheck@v0.1.2
         with:
           url: https://your-site.example
           format: sarif
@@ -200,12 +200,14 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 ### Limitations
 
 - It looks at one URL and its redirects. It does not crawl, log in or run JavaScript, so cookies and resources added by scripts are not seen.
+- Whatever the URL answers is graded. If that is an error page (a 404, or a 403 from bot protection), the report says so in an info finding, but the grade is still the error page's.
+- A domain with non-ASCII letters has to be given in its `xn--` form.
 - If a response has several Content-Security-Policy headers, only the first is analysed.
 - Mixed content is found by pattern-matching the HTML, not by parsing it.
 - The certificate chain is verified against the root store of the machine running the scan, without fetching missing intermediates. A server that omits its intermediate certificate is reported as untrusted, which is how most non-browser clients see it.
 - TLS checks cover protocol versions, not individual cipher suites.
 - How far the fix snippets are tested differs. CI pastes the header, exposed-dotfile and version-disclosure snippets into real nginx, Apache and Caddy (the Ubuntu packages) and requires the rescan to be an A. The TLS, HTTPS-redirect and cookie snippets, and everything for Next.js, Vercel and Netlify, were written from each platform's documentation and not run live; the header snippets for `next.config.js`, `vercel.json` and `netlify.toml` are only syntax-checked.
-- SPF and DMARC are looked up on the hostname and then each parent domain down to two labels, without a public-suffix list. An SPF record found only on a parent domain is reported with a note, since SPF is not inherited. DKIM is not checked because it needs a selector name.
+- SPF and DMARC are looked up on the hostname and then each parent domain down to the registrable one. There is no public-suffix list: `example.com` and common country forms such as `example.co.uk` or `example.com.tr` are recognised, a rarer suffix is not, and the lookup then goes one level too far. An SPF record found only on a parent domain is reported with a note, since SPF is not inherited. DKIM is not checked because it needs a selector name.
 
 ## Roadmap
 
@@ -224,7 +226,7 @@ go vet ./...
 gofmt -l .
 ```
 
-CI also runs the composite action against a fixture site and applies the generated fixes to real nginx, Apache and Caddy (`.github/scripts/live-fixes.sh`; it rewrites system config, so it is for CI runners only). Pushing a `v*` tag that matches `Version` in `internal/scan/scan.go` builds the release archives.
+CI also runs the tests on macOS and Windows, runs the composite action against a fixture site and applies the generated fixes to real nginx, Apache and Caddy (`.github/scripts/live-fixes.sh`; it rewrites system config, so it is for CI runners only). Pushing a `v*` tag that matches `Version` in `internal/scan/scan.go` builds the release archives.
 
 The code is three small packages: `internal/scan` (the checks, the SSRF guard and the fix snippets), `internal/report` (terminal, JSON, SARIF and the HTML template) and the root package (CLI and web UI). There are no third-party dependencies. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
