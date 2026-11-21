@@ -6,14 +6,23 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
 type lookupTXT func(ctx context.Context, name string) ([]string, error)
 
+// secondLevel are the labels registries commonly sell names under below a
+// two-letter country code: example.co.uk, example.com.tr.
+// shortcut: a dozen common labels instead of the public-suffix list, so a
+// rarer suffix is still walked one level too far; embed the list if that
+// produces wrong advice.
+var secondLevel = []string{"ac", "co", "com", "edu", "gen", "gov", "mil", "ne", "net", "nom", "or", "org"}
+
 // mailDomains returns the domains to look at for email records: the host
-// without "www.", then each parent down to two labels. This is the DNS tree
-// walk from the DMARC specification, without a public-suffix list.
+// without "www.", then each parent down to the registrable domain (two
+// labels, or three under a suffix such as co.uk). This is the DNS tree walk
+// from the DMARC specification, without a public-suffix list.
 func mailDomains(host string) []string {
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if _, err := netip.ParseAddr(host); err == nil || !strings.Contains(host, ".") {
@@ -25,8 +34,12 @@ func mailDomains(host string) []string {
 		}
 	}
 	labels := strings.Split(strings.TrimPrefix(host, "www."), ".")
+	shortest := 2
+	if n := len(labels); len(labels[n-1]) == 2 && slices.Contains(secondLevel, labels[n-2]) {
+		shortest = 3 // "co.uk" is a registry, not somebody's domain
+	}
 	var out []string
-	for i := 0; i+2 <= len(labels) && len(out) < 4; i++ {
+	for i := 0; i+shortest <= len(labels) && len(out) < 4; i++ {
 		out = append(out, strings.Join(labels[i:], "."))
 	}
 	return out
