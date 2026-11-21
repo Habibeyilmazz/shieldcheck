@@ -1,0 +1,14 @@
+name: Check or feature request
+description: Suggest a new passive check or an output option
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like shieldcheck to tell you or do?
+    validations:
+      required: true
+  - type: textarea
+    id: passive
+    attributes:
+      label: How could it be checked passively?
+      description: Which normal GET/HEAD request or DNS lookup shows it? Active testing (payloads, fuzzing) is out of scope.

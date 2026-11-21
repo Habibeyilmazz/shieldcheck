@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (launch round)
+
+- README: "Compared with other tools" (SSL Labs, testssl.sh, securityheaders.com,
+  MDN Observatory, ZAP, Nikto: what each is for and when to pick it instead)
+  and a Contributing section.
+- CONTRIBUTING.md, SECURITY.md, issue forms and a pull request template.
+- Repo topics and description reviewed with `gh repo edit`.
+- Not done: web UI ignore field and SARIF suppressions (still open, see the
+  feature-round notes below); Windows console still untested. A `serve`
+  process on 4110 from an earlier round was left running, not started here.
+- Commits from this round are co-authored by Claude Fable 5.2.
+
 ### Fixed
 
 - Web UI: scanning the same URL again within ten minutes returned the old

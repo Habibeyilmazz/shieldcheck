@@ -1,0 +1,30 @@
+name: Bug or false positive
+description: A wrong grade, a wrong finding, a crash, or a fix snippet that does not work
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or web UI steps
+      description: For example `shieldcheck scan https://example.com --fix nginx`. Use a site you own, or example.com.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant response headers or output
+      description: Remove cookie values, tokens and anything private.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version and OS
+      description: Output of `shieldcheck version`, and your operating system
+    validations:
+      required: true

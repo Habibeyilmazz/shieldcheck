@@ -221,6 +221,18 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 - How far the fix snippets are tested differs. CI pastes the header, exposed-dotfile and version-disclosure snippets into real nginx, Apache and Caddy (the Ubuntu packages) and requires the rescan to be an A. The TLS, HTTPS-redirect and cookie snippets, and everything for Next.js, Vercel and Netlify, were written from each platform's documentation and not run live; the header snippets for `next.config.js`, `vercel.json` and `netlify.toml` are only syntax-checked.
 - SPF and DMARC are looked up on the hostname and then each parent domain down to the registrable one. There is no public-suffix list: `example.com` and common country forms such as `example.co.uk` or `example.com.tr` are recognised, a rarer suffix is not, and the lookup then goes one level too far. An SPF record found only on a parent domain is reported with a note, since SPF is not inherited. DKIM is not checked because it needs a selector name.
 
+## Compared with other tools
+
+shieldcheck is a narrow tool: one page, passive, the basics, with the fix attached. Use something else when you need more.
+
+| Tool | What it is | Pick it instead when |
+| --- | --- | --- |
+| [Qualys SSL Labs](https://www.ssllabs.com/ssltest/) and [testssl.sh](https://testssl.sh/) | Deep TLS analysis: cipher suites, key exchange, known TLS vulnerabilities | You need a thorough TLS review. shieldcheck only checks the certificate and which protocol versions are accepted |
+| [securityheaders.com](https://securityheaders.com/) and the [MDN HTTP Observatory](https://developer.mozilla.org/en-US/observatory) | Hosted header graders | You want a quick grade with nothing to install, on a public site. shieldcheck also runs on localhost and in CI, and adds TLS, cookies, redirects, SPF/DMARC and fix snippets |
+| [OWASP ZAP](https://www.zaproxy.org/) and [Nikto](https://github.com/sullo/nikto) | Active scanners that crawl and send attack payloads | You want to find vulnerabilities in the application itself. shieldcheck never sends a payload and does not look at your application's logic |
+
+Hosted scanners are convenient but cannot reach a dev server or a staging site behind a firewall, which is the case `--allow-private` and the GitHub Action cover here. The table describes what each tool is for as of writing; check their own pages for current features.
+
 ## Roadmap
 
 - A container image
@@ -229,6 +241,10 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 - Job summary and grade outputs for the GitHub Action
 - DNSSEC and CAA record checks
 - Scan a list of URLs in one run
+
+## Contributing
+
+Bug reports, false positives and wrong fix snippets are the most useful contributions. See [CONTRIBUTING.md](CONTRIBUTING.md). Report a vulnerability in shieldcheck itself privately, as described in [SECURITY.md](SECURITY.md).
 
 ## Development
 
