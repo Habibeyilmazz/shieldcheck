@@ -129,7 +129,7 @@ func Terminal(w io.Writer, r *scan.Report, o TerminalOptions) error {
 		}
 		advice := "Fix: " + f.Advice
 		if h := f.Header; h != nil {
-			p("%sFix: send %s: %s\n", indent, h.Name, h.Value)
+			p("%sFix: Send %s: %s\n", indent, h.Name, h.Value)
 			advice = f.Advice
 		}
 		if f.Advice != "" {

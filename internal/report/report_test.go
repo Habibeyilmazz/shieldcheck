@@ -79,7 +79,7 @@ func TestTerminalPrintsHeaderConfigOnce(t *testing.T) {
 	if n := strings.Count(out, "add_header X-Content-Type-Options"); n != 1 {
 		t.Errorf("the nosniff config is printed %d times, want once in the combined snippet:\n%s", n, out)
 	}
-	for _, want := range []string{"AS ONE SNIPPET", "Fix: send Referrer-Policy: no-referrer", "add_header Referrer-Policy", "add_header Content-Security-Policy"} {
+	for _, want := range []string{"AS ONE SNIPPET", "Fix: Send Referrer-Policy: no-referrer", "add_header Referrer-Policy", "add_header Content-Security-Policy"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("terminal output lacks %q:\n%s", want, out)
 		}
