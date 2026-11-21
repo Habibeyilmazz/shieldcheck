@@ -478,3 +478,24 @@ func TestOversizedResponsesAreRefused(t *testing.T) {
 		t.Errorf("overlong redirect: err = %.80v", err)
 	}
 }
+
+// Old servers and appliances often still offer only RSA key exchange, which Go
+// leaves out of its default cipher suites. Browsers still connect to them, so
+// the scanner must too: they are the sites with the most to report.
+func TestLegacyCipherSuitesCanStillBeScanned(t *testing.T) {
+	srv := tlsServer(t, goodSite(), &tls.Config{
+		MinVersion: tls.VersionTLS10, MaxVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
+	})
+	rep := run(t, srv.URL, Options{RootCAs: trust(srv)})
+	got := ids(rep.Findings)
+	if rep.TLS == nil || got["tls.legacy-protocol"] != Medium || got["tls.cert-ok"] != Pass {
+		t.Errorf("TLS info %+v, findings %v", rep.TLS, got)
+	}
+
+	// The same goes for a server stuck on TLS 1.0 and 1.1.
+	old := tlsServer(t, goodSite(), &tls.Config{MinVersion: tls.VersionTLS10, MaxVersion: tls.VersionTLS11})
+	if got := ids(run(t, old.URL, Options{RootCAs: trust(old)}).Findings); got["tls.legacy-protocol"] != High {
+		t.Errorf("TLS 1.0/1.1 only: findings %v, want tls.legacy-protocol (high)", got)
+	}
+}

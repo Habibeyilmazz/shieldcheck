@@ -58,6 +58,18 @@ func isPublic(a netip.Addr) bool {
 	return true
 }
 
+// scanSuites is every cipher suite Go implements, including the ones it no
+// longer offers by default (RSA key exchange, 3DES, RC4). The scanner only
+// observes, browsers still connect to servers that need these, and those
+// servers are the ones with the most to report.
+var scanSuites = func() []uint16 {
+	var ids []uint16
+	for _, s := range append(tls.CipherSuites(), tls.InsecureCipherSuites()...) {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}()
+
 type client struct {
 	http    *http.Client
 	dialer  *net.Dialer
@@ -92,7 +104,7 @@ func newClient(o Options) *client {
 				// Certificates are verified and reported by checkTLS; skipping
 				// verification here lets the other checks still run on a site
 				// whose certificate is broken.
-				TLSClientConfig:        &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig:        &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS10, CipherSuites: scanSuites},
 				TLSHandshakeTimeout:    8 * time.Second,
 				ResponseHeaderTimeout:  12 * time.Second,
 				MaxResponseHeaderBytes: 64 << 10, // the default is 10 MB, which a hostile site could make us keep

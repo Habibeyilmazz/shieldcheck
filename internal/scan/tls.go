@@ -26,7 +26,7 @@ func (c *client) handshake(ctx context.Context, addr, host string, min, max uint
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	d := tls.Dialer{NetDialer: c.dialer, Config: &tls.Config{
-		ServerName: host, MinVersion: min, MaxVersion: max,
+		ServerName: host, MinVersion: min, MaxVersion: max, CipherSuites: scanSuites,
 		InsecureSkipVerify: true, // verified by verifyChain so the failure can be explained
 	}}
 	conn, err := d.DialContext(ctx, "tcp", addr)
