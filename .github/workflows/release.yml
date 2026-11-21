@@ -1,0 +1,55 @@
+name: Release
+
+# Pushing a tag such as v0.1.1 builds the binaries and attaches them to the
+# GitHub release for that tag. The tag must match the version in the code.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+      - name: Test
+        run: go test ./...
+      - name: Build archives
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          test "$(go run . version)" = "shieldcheck $version" || { echo "tag $GITHUB_REF_NAME does not match $(go run . version)"; exit 1; }
+          mkdir dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*} arch=${target#*/}
+            name=shieldcheck_${version}_${os}_${arch}
+            mkdir "dist/$name"
+            cp LICENSE README.md "dist/$name/"
+            if [ "$os" = windows ]; then
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "dist/$name/shieldcheck.exe" .
+              (cd dist && zip -qr "$name.zip" "$name")
+            else
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "dist/$name/shieldcheck" .
+              tar -C dist -czf "dist/$name.tar.gz" "$name"
+            fi
+            rm -r "dist/$name"
+          done
+          (cd dist && sha256sum shieldcheck_* > checksums.txt && cat checksums.txt)
+      - name: The Linux binary runs
+        run: |
+          tar -xzf dist/shieldcheck_*_linux_amd64.tar.gz
+          ./shieldcheck_*_linux_amd64/shieldcheck version
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          # Release notes are this version's section of the changelog.
+          awk -v v="$version" '/^## \[/ { on = index($0, "## [" v "]") == 1; next } on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "shieldcheck $version" --notes-file notes.md

@@ -6,11 +6,21 @@ It exists because most scanners tell you a header is missing and stop there. shi
 
 > **Scan only sites you own or are authorised to test.**
 
-![The shieldcheck web UI showing an F grade, a severity breakdown, a platform switch and the first finding with its nginx fix](docs/screenshots/report.png)
+![The shieldcheck web UI after scanning example.com: an F grade, a severity breakdown, a platform switch and the first finding with its nginx fix](docs/screenshots/report.png)
 
 ## Quickstart
 
-You need Go 1.25 or newer.
+Download the archive for your system from the [latest release](https://github.com/Habibeyilmazz/shieldcheck/releases/latest) (Linux, macOS and Windows, amd64 and arm64), unpack it and run the binary inside:
+
+```sh
+tar -xzf shieldcheck_*_linux_amd64.tar.gz
+cd shieldcheck_*_linux_amd64
+./shieldcheck scan https://your-site.example
+```
+
+`checksums.txt` on the release page has the SHA-256 of every archive. The binaries are not signed: if macOS refuses to open one downloaded with a browser, run `xattr -d com.apple.quarantine shieldcheck` once.
+
+With Go 1.25 or newer you can install it instead:
 
 ```sh
 go install github.com/Habibeyilmazz/shieldcheck@latest
@@ -25,6 +35,8 @@ cd shieldcheck
 go build -o shieldcheck .
 ./shieldcheck scan https://your-site.example --fix nginx
 ```
+
+`go install` puts the binary in `$(go env GOPATH)/bin`; add that directory to your `PATH` if `shieldcheck` is not found. The examples below call it `shieldcheck`: write `./shieldcheck` when you run it from the folder it is in.
 
 The start of a real scan of `https://example.com`:
 
@@ -110,7 +122,7 @@ shieldcheck serve
 
 The UI runs the same scan and renders the same report, with download links for the HTML, JSON and SARIF versions. It follows your system's light or dark setting.
 
-![Findings in the web UI with the Next.js fixes selected](docs/screenshots/findings.png)
+![Findings for example.com in the web UI with the Next.js fixes selected](docs/screenshots/findings.png)
 
 ### GitHub Action
 
@@ -119,13 +131,34 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: Habibeyilmazz/shieldcheck@v0.1.0
+      - uses: Habibeyilmazz/shieldcheck@v0.1.1
         with:
           url: https://your-site.example
           min-grade: B
 ```
 
 Inputs: `url` (required), `min-grade`, `format`, `output`, `probe`, `allow-private`. The action is composite: it sets up Go, builds shieldcheck from the action's own source and runs one scan, so there is no binary download to trust. To scan a server started earlier in the same job, set `allow-private: "true"`; it is graded without the HTTPS checks (see [Grading](#grading)).
+
+To get the findings as alerts in the repository's Security tab, write SARIF and upload it to GitHub code scanning:
+
+```yaml
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Habibeyilmazz/shieldcheck@v0.1.1
+        with:
+          url: https://your-site.example
+          format: sarif
+          output: shieldcheck.sarif
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shieldcheck.sarif
+```
 
 ## Grading
 
@@ -171,12 +204,12 @@ Nothing is fuzzed, guessed or brute-forced, and no request carries a payload. Re
 - Mixed content is found by pattern-matching the HTML, not by parsing it.
 - The certificate chain is verified against the root store of the machine running the scan, without fetching missing intermediates. A server that omits its intermediate certificate is reported as untrusted, which is how most non-browser clients see it.
 - TLS checks cover protocol versions, not individual cipher suites.
-- The fix snippets were written from each platform's documentation. The header snippets for `vercel.json`, `netlify.toml` and `next.config.js` were syntax-checked; none were run against a live nginx, Apache, Caddy, Vercel or Netlify install.
+- How far the fix snippets are tested differs. CI pastes the header, exposed-dotfile and version-disclosure snippets into real nginx, Apache and Caddy (the Ubuntu packages) and requires the rescan to be an A. The TLS, HTTPS-redirect and cookie snippets, and everything for Next.js, Vercel and Netlify, were written from each platform's documentation and not run live; the header snippets for `next.config.js`, `vercel.json` and `netlify.toml` are only syntax-checked.
 - SPF and DMARC are looked up on the hostname and then each parent domain down to two labels, without a public-suffix list. An SPF record found only on a parent domain is reported with a note, since SPF is not inherited. DKIM is not checked because it needs a selector name.
 
 ## Roadmap
 
-- Release binaries and a container image, so Go is not required
+- A container image
 - Subresource Integrity check for third-party scripts and styles
 - Analyse every Content-Security-Policy header, not just the first
 - Job summary and grade outputs for the GitHub Action
@@ -190,6 +223,8 @@ go test ./...        # unit and end-to-end tests against local httptest fixtures
 go vet ./...
 gofmt -l .
 ```
+
+CI also runs the composite action against a fixture site and applies the generated fixes to real nginx, Apache and Caddy (`.github/scripts/live-fixes.sh`; it rewrites system config, so it is for CI runners only). Pushing a `v*` tag that matches `Version` in `internal/scan/scan.go` builds the release archives.
 
 The code is three small packages: `internal/scan` (the checks, the SSRF guard and the fix snippets), `internal/report` (terminal, JSON, SARIF and the HTML template) and the root package (CLI and web UI). There are no third-party dependencies. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
