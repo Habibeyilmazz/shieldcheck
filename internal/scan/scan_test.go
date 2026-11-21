@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -261,6 +262,37 @@ func TestRedirectChainIsRecorded(t *testing.T) {
 		t.Errorf("redirects = %+v, final %s", rep.Redirects, rep.FinalURL)
 	}
 	wantIDs(t, ids(rep.Findings), "https.redirect-ok")
+}
+
+func TestPlainHTTPChainIsFollowedUntilHTTPS(t *testing.T) {
+	var secureHits atomic.Int32
+	secure := tlsServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { secureHits.Add(1) }), nil)
+	www := httptest.NewServer(http.RedirectHandler(secure.URL+"/", http.StatusMovedPermanently))
+	defer www.Close()
+	apex := httptest.NewServer(http.RedirectHandler(www.URL+"/", http.StatusMovedPermanently))
+	defer apex.Close()
+
+	u, _ := url.Parse(apex.URL + "/")
+	chain := newClient(Options{AllowPrivate: true}).followPlain(context.Background(), u)
+	if len(chain) != 2 || secureHits.Load() != 0 {
+		t.Fatalf("chain = %d hops, %d requests to the HTTPS target; want 2 and 0", len(chain), secureHits.Load())
+	}
+	if f := httpRedirectFinding(chain); f.ID != "https.redirect-ok" || !strings.Contains(f.Detail, www.URL) {
+		t.Errorf("finding = %s %q", f.ID, f.Detail)
+	}
+
+	// The same chain, reached by starting the scan on http://.
+	rep := run(t, apex.URL, Options{RootCAs: trust(secure)})
+	wantIDs(t, ids(rep.Findings), "https.redirect-ok")
+
+	loop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, r.URL.Path+"x", http.StatusFound)
+	}))
+	defer loop.Close()
+	u, _ = url.Parse(loop.URL + "/")
+	if chain := newClient(Options{AllowPrivate: true}).followPlain(context.Background(), u); len(chain) != maxRedirects+1 {
+		t.Errorf("redirect loop: %d hops, want it to stop at %d", len(chain), maxRedirects+1)
+	}
 }
 
 func TestDowngradeRedirect(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -178,25 +179,35 @@ func TestMixedContentRespectsUpgradeInsecureRequests(t *testing.T) {
 }
 
 func TestHTTPRedirectFinding(t *testing.T) {
-	u, _ := url.Parse("http://fixture.test/")
-	cases := []struct {
+	// Each case is the chain of plain-HTTP answers: status and Location per hop.
+	type answer struct {
 		status   int
 		location string
-		want     string
+	}
+	cases := []struct {
+		chain []answer
+		want  string
 	}{
-		{301, "https://fixture.test/", "https.redirect-ok"},
-		{308, "https://www.fixture.test/", "https.redirect-ok"},
-		{200, "", "https.no-redirect"},
-		{302, "http://www.fixture.test/", "https.http-other"},
-		{403, "", "https.http-other"},
+		{[]answer{{301, "https://fixture.test/"}}, "https.redirect-ok"},
+		{[]answer{{308, "https://www.fixture.test/"}}, "https.redirect-ok"},
+		{[]answer{{200, ""}}, "https.no-redirect"},
+		{[]answer{{403, ""}}, "https.http-other"},
+		{[]answer{{302, ""}}, "https.http-other"},
+		{[]answer{{301, "http://www.fixture.test/"}, {301, "https://www.fixture.test/"}}, "https.redirect-ok"},
+		{[]answer{{302, "/home"}, {200, ""}}, "https.no-redirect"},
 	}
 	for _, tc := range cases {
-		h := hop{URL: u, Status: tc.status, Header: http.Header{}}
-		if tc.location != "" {
-			h.Header.Set("Location", tc.location)
+		var chain []hop
+		for i, a := range tc.chain {
+			u, _ := url.Parse(fmt.Sprintf("http://hop%d.fixture.test/", i))
+			h := hop{URL: u, Status: a.status, Header: http.Header{}}
+			if a.location != "" {
+				h.Header.Set("Location", a.location)
+			}
+			chain = append(chain, h)
 		}
-		if got := httpRedirectFinding(h); got.ID != tc.want {
-			t.Errorf("%d %q: got %s, want %s", tc.status, tc.location, got.ID, tc.want)
+		if got := httpRedirectFinding(chain); got.ID != tc.want {
+			t.Errorf("%v: got %s, want %s", tc.chain, got.ID, tc.want)
 		}
 	}
 }

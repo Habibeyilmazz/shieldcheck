@@ -116,10 +116,17 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 			"Each redirect adds a round trip for every first-time visitor.", "Redirect straight to the final URL.", nil))
 	}
 
-	// Does plain HTTP redirect to HTTPS? Use the scan's own first hop if it
-	// started on http://, otherwise ask port 80 once.
-	first := p.hops[0]
-	if first.URL.Scheme != "http" {
+	// Does plain HTTP end up on HTTPS? Use the scan's own plain-HTTP hops if it
+	// started on http://, otherwise ask port 80 and follow it while it stays on
+	// http://, so "http://site to http://www.site to https://www.site" counts.
+	var chain []hop
+	for _, h := range p.hops {
+		if h.URL.Scheme != "http" {
+			break
+		}
+		chain = append(chain, h)
+	}
+	if len(chain) == 0 {
 		if port := p.final.URL.Port(); port != "" && port != "443" {
 			return out // a non-standard HTTPS port has no matching HTTP port to test
 		}
@@ -127,26 +134,51 @@ func checkTransport(ctx context.Context, c *client, p *page) []Finding {
 		if strings.Contains(host, ":") {
 			host = "[" + host + "]" // IPv6 literal
 		}
-		u := &url.URL{Scheme: "http", Host: host, Path: "/"}
-		resp, err := c.get(ctx, u)
-		if err != nil {
+		chain = c.followPlain(ctx, &url.URL{Scheme: "http", Host: host, Path: "/"})
+		if len(chain) == 0 {
 			return append(out, f("https.no-http", Pass, "Plain HTTP is not offered", "Port 80 did not answer.", "", "", nil))
 		}
-		resp.Body.Close()
-		first = hop{URL: u, Status: resp.StatusCode, Header: resp.Header}
 	}
-	return append(out, httpRedirectFinding(first))
+	return append(out, httpRedirectFinding(chain))
 }
 
-// httpRedirectFinding judges the answer to a plain-HTTP request for the site.
-func httpRedirectFinding(first hop) Finding {
-	f := Finding{Category: "transport", Detail: fmt.Sprintf("%s answers %d.", first.URL, first.Status)}
-	loc, _ := first.URL.Parse(first.Header.Get("Location"))
+// followPlain GETs u and follows redirects for as long as they stay on
+// http://. It stops at the first answer that is not such a redirect, without
+// requesting an https:// target, and returns the answers it got.
+func (c *client) followPlain(ctx context.Context, u *url.URL) []hop {
+	var chain []hop
+	for len(chain) <= maxRedirects {
+		resp, err := c.get(ctx, u)
+		if err != nil {
+			break
+		}
+		resp.Body.Close()
+		chain = append(chain, hop{URL: u, Status: resp.StatusCode, Header: resp.Header})
+		loc := resp.Header.Get("Location")
+		next, err := u.Parse(loc)
+		if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" || err != nil || next.Scheme != "http" || next.Hostname() == "" {
+			break
+		}
+		u = next
+	}
+	return chain
+}
+
+// httpRedirectFinding judges where a plain-HTTP request for the site ends up.
+// chain is the request and any redirects that stayed on http://.
+func httpRedirectFinding(chain []hop) Finding {
+	last := chain[len(chain)-1]
+	who := last.URL.String()
+	if len(chain) > 1 {
+		who = fmt.Sprintf("%s redirects to %s, which", chain[0].URL, last.URL)
+	}
+	f := Finding{Category: "transport", Detail: clip(fmt.Sprintf("%s answers %d.", who, last.Status))}
+	loc, _ := last.URL.Parse(last.Header.Get("Location"))
 	switch {
-	case first.Status >= 300 && first.Status < 400 && loc != nil && loc.Scheme == "https":
+	case last.Status >= 300 && last.Status < 400 && loc != nil && loc.Scheme == "https":
 		f.ID, f.Severity, f.Title = "https.redirect-ok", Pass, "HTTP redirects to HTTPS"
-		f.Detail = fmt.Sprintf("%s answers %d to %s", first.URL, first.Status, clip(loc.String()))
-	case first.Status >= 200 && first.Status < 300:
+		f.Detail = clip(fmt.Sprintf("%s answers %d to %s", who, last.Status, loc))
+	case last.Status >= 200 && last.Status < 300:
 		f.ID, f.Severity, f.Title = "https.no-redirect", High, "Plain HTTP does not redirect to HTTPS"
 		f.Risk = "Visitors who type the domain or follow an old http:// link stay on the unencrypted version, where everything they send and receive can be read and changed by anyone on the network path."
 		f.Advice = "Answer every plain HTTP request with a permanent redirect to the same URL on https://."
