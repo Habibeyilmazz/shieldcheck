@@ -45,6 +45,13 @@ code, pre, .url { font-family: var(--mono); }
 .scan button[disabled] { opacity: .7; cursor: progress; }
 .scan .opt { display: flex; gap: .5rem; align-items: baseline; margin-top: .75rem; }
 .scan .opt label { font-weight: 400; margin: 0; }
+.status:empty { display: none; }
+.status { display: flex; align-items: center; gap: .6rem; margin-top: .75rem; font-weight: 700; }
+.status::before { content: ""; flex: none; width: 1rem; height: 1rem; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .status::before { animation: none; border-color: var(--accent); } }
+body.busy .error, body.busy .layout { opacity: .45; }
 .scan .note, .foot { color: var(--muted); font-size: .95rem; }
 .scan .note { margin-top: .6rem; max-width: 46rem; }
 .error { max-width: 46rem; margin-bottom: 1.5rem; padding: .8rem 1rem; border-left: 4px solid var(--critical); background: var(--surface); }
@@ -82,11 +89,11 @@ code, pre, .url { font-family: var(--mono); }
 .platform label:has(:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
 .downloads a + a { margin-left: .9rem; }
 
-main { min-width: 0; }
-main h1 { font: 700 1.3rem/1.3 var(--mono); overflow-wrap: anywhere; }
+.results { min-width: 0; }
+.results h1 { font: 700 1.3rem/1.3 var(--mono); overflow-wrap: anywhere; }
 .facts { color: var(--muted); margin-top: .5rem; font-size: .98rem; }
 .facts li { list-style: none; overflow-wrap: anywhere; }
-main h2 { font-size: 1.25rem; margin: 2.5rem 0 .25rem; }
+.results h2 { font-size: 1.25rem; margin: 2.5rem 0 .25rem; }
 .finding { border-top: 1px solid var(--line); border-left: 4px solid var(--sev); padding: 1rem 0 1.1rem 1.1rem; margin-top: 1rem; }
 .finding h3 { font-size: 1.15rem; line-height: 1.3; }
 .finding .sev { font-size: .95rem; }
@@ -96,6 +103,7 @@ details { margin-top: .75rem; }
 summary { cursor: pointer; font-weight: 700; width: fit-content; }
 .fix { margin-top: .75rem; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); overflow: hidden; }
 .fix figcaption { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .35rem .5rem .35rem .8rem; border-bottom: 1px solid var(--line); font-size: .92rem; color: var(--muted); }
+.fix pre:focus-visible { outline-offset: -3px; }
 .fix pre { margin: 0; padding: .8rem; overflow-x: auto; font-size: .86rem; line-height: 1.5; tab-size: 4; }
 .copy { font: 700 .85rem var(--sans); padding: .15rem .6rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
 .passed { list-style: none; margin-top: .5rem; }
@@ -131,6 +139,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
   {{if .Report}}<span class="mark">{{if .Serve}}<a href="/">shieldcheck</a>{{else}}shieldcheck{{end}}</span>{{else}}<h1 class="mark">shieldcheck</h1>{{end}}
   <span>Passive security check for sites you own</span>
 </header>
+<main>
 
 {{if .Serve}}
 <form class="scan" action="/scan" method="get">
@@ -142,6 +151,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
   {{if .ProbeAllowed}}<div class="opt"><input type="checkbox" id="probe" name="probe" value="1"{{if .Probe}} checked{{end}}>
     <label for="probe">Also request /.git/HEAD and /.env to see if they are exposed</label></div>{{end}}
   <p class="note">Scan only sites you own or are authorised to test. A scan takes a few seconds.</p>
+  <p class="status" role="status"></p>
 </form>
 {{end}}
 {{if .Error}}<p class="error" role="alert"><strong>Scan failed.</strong> {{.Error}}</p>{{end}}
@@ -181,7 +191,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{end}}
   </aside>
 
-  <main>
+  <div class="results">
     <h1>{{.FinalURL}}</h1>
     <ul class="facts">
       <li>Scanned {{$.Scanned}}</li>
@@ -193,7 +203,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
     {{if .HeaderFixes}}
     <details class="all">
       <summary>All missing headers as one snippet</summary>
-      {{range .HeaderFixes}}<figure class="fix" data-p="{{.Platform}}"><figcaption><span>{{.Where}}</span></figcaption><pre><code>{{.Snippet}}</code></pre></figure>{{end}}
+      {{range .HeaderFixes}}<figure class="fix" data-p="{{.Platform}}"><figcaption><span>{{.Where}}</span></figcaption><pre tabindex="0"><code>{{.Snippet}}</code></pre></figure>{{end}}
     </details>
     {{end}}
     {{range $.Issues}}
@@ -206,7 +216,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
       <details open>
         <summary>How to fix</summary>
         {{if .Advice}}<p>{{.Advice}}</p>{{end}}
-        {{range .Fixes}}<figure class="fix"{{if ne .Platform "any"}} data-p="{{.Platform}}"{{end}}><figcaption><span>{{.Where}}</span></figcaption><pre><code>{{.Snippet}}</code></pre></figure>{{end}}
+        {{range .Fixes}}<figure class="fix"{{if ne .Platform "any"}} data-p="{{.Platform}}"{{end}}><figcaption><span>{{.Where}}</span></figcaption><pre tabindex="0"><code>{{.Snippet}}</code></pre></figure>{{end}}
       </details>
       {{end}}
     </article>
@@ -218,7 +228,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
       {{range $.Passed}}<li>{{.Title}}{{if .Detail}}<small>{{.Detail}}</small>{{end}}</li>{{end}}
     </ul>
     {{end}}
-  </main>
+  </div>
 </div>
 {{else}}{{if .Serve}}
 <section class="intro">
@@ -239,6 +249,7 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
   </div>
 </section>
 {{end}}{{end}}
+</main>
 
 <footer class="foot">
   {{with .Report}}Report by shieldcheck {{.Version}}. A passing grade means the basics are in place, not that the site is secure. {{end}}Scan only sites you own or are authorised to test.
@@ -275,8 +286,19 @@ summary { cursor: pointer; font-weight: 700; width: fit-content; }
   const form = document.querySelector('.scan');
   if (form) {
     const btn = form.querySelector('button');
-    form.addEventListener('submit', () => { btn.disabled = true; btn.textContent = 'Scanning…'; });
-    addEventListener('pageshow', () => { btn.disabled = false; btn.textContent = 'Scan site'; });
+    const status = form.querySelector('.status');
+    form.addEventListener('submit', () => {
+      btn.disabled = true;
+      btn.textContent = 'Scanning…';
+      document.body.classList.add('busy');
+      status.textContent = 'Scanning ' + form.url.value.trim() + '…';
+    });
+    addEventListener('pageshow', () => {
+      btn.disabled = false;
+      btn.textContent = 'Scan site';
+      document.body.classList.remove('busy');
+      status.textContent = '';
+    });
   }
 })();
 </script>
