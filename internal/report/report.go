@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/url"
 	"strings"
 	"unicode"
 
@@ -159,6 +160,13 @@ func SARIF(w io.Writer, r *scan.Report) error {
 	level := map[scan.Severity]string{scan.Critical: "error", scan.High: "error", scan.Medium: "warning", scan.Low: "note", scan.Info: "note"}
 	// GitHub's 0-10 scale for security results.
 	score := map[scan.Severity]string{scan.Critical: "9.5", scan.High: "8.0", scan.Medium: "5.5", scan.Low: "3.0", scan.Info: "0.0"}
+	// GitHub code scanning refuses an upload whose locations are http(s) URLs
+	// ("unrecognized SARIF location URI scheme"), so the site is written as a
+	// relative path: host/path. A ":" in the first segment would read as a scheme.
+	location := "site"
+	if u, err := url.Parse(r.FinalURL); err == nil && u.Hostname() != "" {
+		location = strings.ReplaceAll(u.Hostname(), ":", "-") + u.EscapedPath()
+	}
 	rules, results := []obj{}, []obj{}
 	for _, f := range r.Findings {
 		if f.Severity == scan.Pass {
@@ -181,8 +189,8 @@ func SARIF(w io.Writer, r *scan.Report) error {
 			"ruleId":    f.ID,
 			"ruleIndex": len(rules) - 1,
 			"level":     level[f.Severity],
-			"message":   obj{"text": strings.TrimSpace(f.Title + ". " + f.Detail)},
-			"locations": []obj{{"physicalLocation": obj{"artifactLocation": obj{"uri": r.FinalURL}}}},
+			"message":   obj{"text": strings.TrimSpace(f.Title+". "+f.Detail) + " Scanned URL: " + r.FinalURL},
+			"locations": []obj{{"physicalLocation": obj{"artifactLocation": obj{"uri": location}}}},
 		})
 	}
 	enc := json.NewEncoder(w)

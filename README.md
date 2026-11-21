@@ -98,7 +98,7 @@ shieldcheck scan your-site.example --min-grade B          # for CI: fails below 
 
 - **terminal**: coloured when stdout is a terminal, plain otherwise or with `NO_COLOR` set.
 - **json**: the full report, including every fix for every platform.
-- **sarif**: SARIF 2.1.0, one rule and one result per finding. Uploading it to GitHub code scanning has not been tested.
+- **sarif**: SARIF 2.1.0, one rule and one result per finding, for GitHub code scanning (see [GitHub Action](#github-action)). A website has no file to point at, so each result's location is the site written as a path (`your-site.example/`) and the full URL is in the message.
 - **html**: one self-contained file with no external requests. It has the same platform switch and copy buttons as the web UI and works offline.
 
 ### Web UI

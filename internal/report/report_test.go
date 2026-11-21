@@ -127,8 +127,10 @@ func TestSARIF(t *testing.T) {
 		if run.Tool.Driver.Rules[r.RuleIndex].ID != r.RuleID {
 			t.Errorf("ruleIndex %d does not point at %s", r.RuleIndex, r.RuleID)
 		}
-		if r.Message.Text == "" || r.Locations[0].PhysicalLocation.ArtifactLocation.URI != "https://fixture.test/" {
-			t.Errorf("result %s lacks a message or location", r.RuleID)
+		// GitHub code scanning rejects http(s) location URIs, so the location is
+		// a relative path and the URL is in the message.
+		if uri := r.Locations[0].PhysicalLocation.ArtifactLocation.URI; uri != "fixture.test/" || !strings.Contains(r.Message.Text, "https://fixture.test/") {
+			t.Errorf("result %s: location %q, message %q", r.RuleID, uri, r.Message.Text)
 		}
 	}
 	if levels["csp.missing"] != "error" || levels["spf.missing"] != "warning" || levels["disclosure.version"] != "note" {
@@ -136,6 +138,25 @@ func TestSARIF(t *testing.T) {
 	}
 	if !strings.Contains(run.Tool.Driver.Rules[0].Help.Text, "add_header") {
 		t.Error("rule help should include the fix snippets")
+	}
+}
+
+func TestSARIFLocationIsARelativePath(t *testing.T) {
+	for final, want := range map[string]string{
+		"https://fixture.test/app/sign%20in?next=/": "fixture.test/app/sign%20in",
+		"http://localhost:3000/":                    "localhost/",
+		"http://[::1]:8080/":                        "--1/",
+		"https://fixture.test":                      "fixture.test",
+	} {
+		rep := sample()
+		rep.FinalURL = final
+		var buf bytes.Buffer
+		if err := SARIF(&buf, rep); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(buf.String(), `"uri": "`+want+`"`) {
+			t.Errorf("%s: want location %q in\n%s", final, want, buf.String())
+		}
 	}
 }
 
