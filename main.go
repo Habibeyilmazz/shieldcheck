@@ -74,6 +74,15 @@ func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
 	return fs
 }
 
+// exitCode is what a flag parsing error ends the program with: asking for
+// help is not a failure.
+func exitCode(err error) int {
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	return 2
+}
+
 // parseArgs lets flags come before or after positional arguments, which the
 // flag package does not do by itself. Everything after "--" is positional.
 func parseArgs(fs *flag.FlagSet, args []string) (positional []string, err error) {
@@ -103,7 +112,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) int {
 	fs.DurationVar(&o.Timeout, "timeout", 45*time.Second, "")
 	urls, err := parseArgs(fs, args)
 	if err != nil {
-		return 2
+		return exitCode(err)
 	}
 	fail := func(format string, a ...any) int {
 		fmt.Fprintf(stderr, "shieldcheck: "+format+"\n", a...)

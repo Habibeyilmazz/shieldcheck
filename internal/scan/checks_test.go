@@ -15,10 +15,11 @@ import (
 
 func TestNormalizeURL(t *testing.T) {
 	ok := map[string]string{
-		"example.com":              "https://example.com/",
-		" https://example.com ":    "https://example.com/",
-		"http://example.com/a?b#c": "http://example.com/a?b",
-		"example.com:8443/path":    "https://example.com:8443/path",
+		"example.com":                          "https://example.com/",
+		" https://example.com ":                "https://example.com/",
+		"http://example.com/a?b#c":             "http://example.com/a?b",
+		"example.com:8443/path":                "https://example.com:8443/path",
+		"example.com/?next=http://other.test/": "https://example.com/?next=http://other.test/",
 	}
 	for in, want := range ok {
 		u, _, err := NormalizeURL(in)

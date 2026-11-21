@@ -26,10 +26,10 @@ func cmdServe(args []string, stderr io.Writer) int {
 	s := newServer()
 	fs.BoolVar(&s.probeAllowed, "probe", false, "")
 	fs.BoolVar(&s.opts.AllowPrivate, "allow-private", false, "")
-	if rest, err := parseArgs(fs, args); err != nil || len(rest) > 0 {
-		if err == nil {
-			fmt.Fprintf(stderr, "shieldcheck: serve takes no arguments, got %q\n", rest)
-		}
+	if rest, err := parseArgs(fs, args); err != nil {
+		return exitCode(err)
+	} else if len(rest) > 0 {
+		fmt.Fprintf(stderr, "shieldcheck: serve takes no arguments, got %q\n", rest)
 		return 2
 	}
 	// Loopback only, by design: the UI fetches whatever URL it is given.

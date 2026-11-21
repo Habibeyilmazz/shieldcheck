@@ -95,6 +95,11 @@ func TestScanCommandErrors(t *testing.T) {
 			t.Errorf("%v: code %d, stderr %q; want 2 and %q", args, code, errOut, want)
 		}
 	}
+	for _, args := range [][]string{{"help"}, {"scan", "--help"}, {"serve", "-h"}} {
+		if code, out, errOut := cli(args...); code != 0 || !strings.Contains(out+errOut, "Usage:") {
+			t.Errorf("%v: code %d, want 0 and the usage text", args, code)
+		}
+	}
 	if code, out, _ := cli("version"); code != 0 || !strings.Contains(out, scan.Version) {
 		t.Errorf("version: %d %q", code, out)
 	}

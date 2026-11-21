@@ -120,7 +120,9 @@ func NormalizeURL(raw string) (u *url.URL, implied bool, err error) {
 	if len(raw) > 2048 {
 		return nil, false, errors.New("URL is too long")
 	}
-	if !strings.Contains(raw, "://") {
+	// A "://" after the first / ? or # belongs to the path or query
+	// ("site.example/?next=https://..."), not to a scheme.
+	if i := strings.Index(raw, "://"); i < 0 || strings.ContainsAny(raw[:i], "/?#") {
 		raw, implied = "https://"+raw, true
 	}
 	u, err = url.Parse(raw)
