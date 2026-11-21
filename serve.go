@@ -119,7 +119,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request, page report.
 	page.URL = strings.TrimSpace(q.Get("url"))
 	page.Probe = s.probeAllowed && q.Get("probe") == "1"
 
-	rep, status, err := s.report(r.Context(), page.URL, page.Probe)
+	rep, status, err := s.report(r.Context(), page.URL, page.Probe, q.Get("format") != "")
 	if err != nil {
 		page.Error = err.Error()
 		s.render(w, status, page)
@@ -147,9 +147,11 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request, page report.
 	}
 }
 
-// report returns a cached report or runs a scan. On failure it returns the
+// report runs a scan, or, for a download (reuse), returns the report the page
+// just showed. Viewing a page always rescans, so a fix shows up at once.
+// On failure it returns the
 // HTTP status to answer with.
-func (s *server) report(ctx context.Context, raw string, probe bool) (*scan.Report, int, error) {
+func (s *server) report(ctx context.Context, raw string, probe, reuse bool) (*scan.Report, int, error) {
 	if _, _, err := scan.NormalizeURL(raw); err != nil {
 		return nil, http.StatusBadRequest, err
 	}
@@ -157,7 +159,7 @@ func (s *server) report(ctx context.Context, raw string, probe bool) (*scan.Repo
 	s.mu.Lock()
 	c, ok := s.cache[key]
 	s.mu.Unlock()
-	if ok && time.Since(c.at) < 10*time.Minute {
+	if reuse && ok && time.Since(c.at) < 10*time.Minute {
 		return c.rep, 0, nil
 	}
 

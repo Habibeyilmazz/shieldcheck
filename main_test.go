@@ -151,6 +151,13 @@ func TestServeUI(t *testing.T) {
 		t.Errorf("scan page: %d\n%s", page.Code, page.Body.String())
 	}
 
+	// Scanning again from the form must really rescan, so a fix shows up.
+	first := s.cache[srv.URL+" false"].rep
+	get(s, query, nil)
+	if s.cache[srv.URL+" false"].rep == first {
+		t.Error("a second scan of the same URL returned the cached report")
+	}
+
 	dl := get(s, query+"&format=json", nil)
 	var rep scan.Report
 	if err := json.Unmarshal(dl.Body.Bytes(), &rep); err != nil || rep.Grade != "D" || !strings.Contains(dl.Header().Get("Content-Disposition"), `filename="shieldcheck-127.0.0.1.json"`) {

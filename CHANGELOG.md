@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Web UI: scanning the same URL again within ten minutes returned the old
+  report, so a fix could not be checked. Viewing a page now always rescans;
+  only the JSON/SARIF/HTML downloads reuse the report just shown.
+
+### Notes (reliability pass)
+
+- Tried to break the CLI and `serve` with: redirect loops, bad or `ftp://`
+  Location, 200 MB bodies, 204 with no body, malformed headers and cookies,
+  empty/huge/non-ASCII/odd-scheme URLs, empty and unknown `--ignore` IDs, a
+  bad `--output` path, other timezones, an unresolvable host, ten parallel
+  UI scans (4 run, the rest get 429 by design). All gave a clear error or a
+  grade; nothing else needed changing. Not tested: Windows console.
+- Commits from this round are co-authored by Claude Sonnet 5.5.
+
 ### Added
 
 - `--ignore ID[,ID...]` (repeatable) and the action input `ignore`: accept a
