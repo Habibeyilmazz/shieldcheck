@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/Habibeyilmazz/shieldcheck/internal/scan"
 )
