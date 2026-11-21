@@ -401,6 +401,38 @@ func TestPrivateTargetsAreBlocked(t *testing.T) {
 	}
 }
 
+// A public site that redirects to an internal address is the classic way
+// around an SSRF check that only looks at the URL the user typed.
+func TestRedirectToPrivateAddressIsBlocked(t *testing.T) {
+	var hit atomic.Bool
+	internal := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit.Store(true) }))
+	defer internal.Close()
+	public := httptest.NewServer(http.RedirectHandler(internal.URL+"/admin", http.StatusFound))
+	defer public.Close()
+
+	// Every fixture is on loopback, so let exactly one address through to play
+	// the public site. All other connections still go through the guard.
+	c := newClient(Options{})
+	c.http.Transport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if addr == public.Listener.Addr().String() {
+			return (&net.Dialer{}).DialContext(ctx, network, addr)
+		}
+		return c.dialer.DialContext(ctx, network, addr)
+	}
+	u, _ := url.Parse(public.URL + "/")
+	hops, _, err := c.follow(context.Background(), u)
+	var blocked *BlockedError
+	if !errors.As(err, &blocked) || len(hops) != 1 || hops[0].Status != http.StatusFound {
+		t.Errorf("err = %v after %d hops, want BlockedError after the redirect was read", err, len(hops))
+	}
+	if chain := c.followPlain(context.Background(), u); len(chain) != 1 {
+		t.Errorf("followPlain made %d requests, want it to stop at the blocked hop", len(chain))
+	}
+	if hit.Load() {
+		t.Error("a request reached the internal server through a redirect")
+	}
+}
+
 func TestRedirectingHostNeedsAValidCertificateToo(t *testing.T) {
 	final := tlsServer(t, goodSite(), nil)
 	cert, _ := selfSigned(t, time.Now().AddDate(1, 0, 0), "") // not in the trusted pool
