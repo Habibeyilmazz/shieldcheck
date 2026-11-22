@@ -151,7 +151,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: Habibeyilmazz/shieldcheck@v0.1.4
+      - uses: Habibeyilmazz/shieldcheck@v0.1.5
         with:
           url: https://your-site.example
           min-grade: B
@@ -162,7 +162,7 @@ Inputs: `url` (required), `min-grade`, `format`, `output`, `ignore` (finding IDs
 Every run adds the grade and the findings table to the job summary, and sets two outputs, `grade` (A to F) and `score` (0 to 100), also when `min-grade` fails the step. They are empty only if the scan could not run. For example, to keep a record or post it elsewhere:
 
 ```yaml
-      - uses: Habibeyilmazz/shieldcheck@v0.1.4
+      - uses: Habibeyilmazz/shieldcheck@v0.1.5
         id: shieldcheck
         with:
           url: https://your-site.example
@@ -184,7 +184,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v5
-      - uses: Habibeyilmazz/shieldcheck@v0.1.4
+      - uses: Habibeyilmazz/shieldcheck@v0.1.5
         with:
           url: https://your-site.example
           format: sarif

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-22
+
 ### Added (perf-a11y round 16)
 
 - SARIF: findings ignored with `--ignore` or in the web UI are now results
